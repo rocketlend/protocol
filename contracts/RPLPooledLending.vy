@@ -15,6 +15,10 @@ interface RocketNodeStakingInterface:
   def stakeRPLFor(_nodeAddress: address, _amount: uint256): nonpayable
 rocketNodeStakingKey: constant(bytes32) = keccak256("contract.addressrocketNodeStaking")
 
+interface RocketRewardsPoolInterface:
+  def getRewardIndex() -> uint256: view
+rocketRewardsPoolKey: constant(bytes32) = keccak256("contract.addressrocketRewardsPool")
+
 MAX_INTERVALS: constant(uint256) = 128
 MAX_PROOF_LENGTH: constant(uint256) = 32
 
@@ -70,10 +74,10 @@ unclaimedRPL: public(HashMap[address, uint256])
 # nodeAddress: amount of staked RPL belonging wholly to the borrower, not borrowed from any of our pools
 #              (when we can determine this has been unstaked, we move the unstaked portion to unclaimedRPL)
 borrowerRPL: public(HashMap[address, uint256])
-# nodeAddress: last rewards interval index for which we have fully accounted for this node
+# nodeAddress: next rewards interval index we need to account for for this node
 #              (all Merkle rewards claims that include any funds belonging to our pools
-#               have been claimed and processed by us up to and including this index)
-accountedIndex: public(HashMap[address, uint256])
+#               have been claimed and processed by us up to but not including this index)
+accountingInterval: public(HashMap[address, uint256])
 
 # poolId is unique for a lender, fee fraction, and end time
 @internal
@@ -144,6 +148,12 @@ def _getMerkleDistributor() -> RocketMerkleDistributorInterface:
     rocketStorage.getAddress(rocketMerkleDistributorKey)
   )
 
+@internal
+def _getRewardsPool() -> RocketRewardsPoolInterface:
+  return RocketRewardsPoolInterface(
+    rocketStorage.getAddress(rocketRewardsPoolKey)
+  )
+
 # anyone can confirm this contract as a node's withdrawal address
 # sets the borrower's withdrawal address as the node's withdrawal address prior to this contract
 # reverts unless the node has set this contract as its pending withdrawal address
@@ -151,11 +161,8 @@ def _getMerkleDistributor() -> RocketMerkleDistributorInterface:
 def confirmWithdrawalAddress(_node: address):
   self.borrowerAddress[_node] = rocketStorage.getNodeWithdrawalAddress(_node)
   rocketStorage.confirmWithdrawalAddress(_node)
-  rocketNodeStaking: RocketNodeStakingInterface = self._getRocketNodeStaking()
-  self.borrowerRPL[_node] = rocketNodeStaking.getNodeRPLStake(_node)
-  # TODO: record the current reward interval index - we don't have any claim on
-  #       rewards before this index, and also need to track which index our
-  #       accounting is up to date for
+  self.borrowerRPL[_node] = self._getRocketNodeStaking().getNodeRPLStake(_node)
+  self.accountingInterval[_node] = self._getRewardsPool().getRewardIndex()
 
 # a borrower can change their withdrawal address for this contract
 # TODO: do we want pending and force logic for this?
