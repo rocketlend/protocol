@@ -21,6 +21,7 @@ rocketRewardsPoolKey: constant(bytes32) = keccak256("contract.addressrocketRewar
 
 MAX_INTERVALS: constant(uint256) = 128
 MAX_PROOF_LENGTH: constant(uint256) = 32
+MAX_FEE_PERCENT: constant(uint256) = 25
 
 interface RocketMerkleDistributorInterface:
   def isClaimed(_rewardIndex: uint256, _nodeAddress: address) -> bool: view
@@ -95,23 +96,24 @@ def createPool(_params: PoolParams) -> bytes32:
   self.pools[poolId].lender = msg.sender
   return poolId
 
-# TODO: add fee amount (with maximum fraction) and fee recipient to supply
-
 @internal
-def _supply(_poolId: bytes32, _amount: uint256):
-  assert RPL.transferFrom(msg.sender, self, _amount), "tf"
-  self.pools[_poolId].supplied += _amount
+def _supply(_poolId: bytes32, _amount: uint256, _feeAmount: uint256, _feeRecipient: address):
+  assert _feeAmount * 100 <= _amount * MAX_FEE_PERCENT, "fee"
+  supplyAmount: uint256 = _amount - _feeAmount
+  assert RPL.transferFrom(msg.sender, self, supplyAmount), "stf"
+  assert RPL.transferFrom(msg.sender, _feeRecipient, _feeAmount), "ftf"
+  self.pools[_poolId].supplied += supplyAmount
 
 # lender can supply RPL to one of their pools
 @external
-def supply(_poolId: bytes32, _amount: uint256):
+def supply(_poolId: bytes32, _amount: uint256, _feeAmount: uint256, _feeRecipient: address):
   assert msg.sender == self.pools[_poolId].lender, "auth"
-  self._supply(_poolId, _amount)
+  self._supply(_poolId, _amount, _feeAmount, _feeRecipient)
 
 # supply RPL to a pool from another address
 @external
-def supplyOnBehalf(_poolId: bytes32, _amount: uint256):
-  self._supply(_poolId, _amount)
+def supplyOnBehalf(_poolId: bytes32, _amount: uint256, _feeAmount: uint256, _feeRecipient: address):
+  self._supply(_poolId, _amount, _feeAmount, _feeRecipient)
 
 # lender can withdraw supplied RPL after the end time (assuming the loan has been repaid)
 @external
