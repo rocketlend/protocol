@@ -6,9 +6,18 @@ interface RPLInterface:
 
 interface RocketStorageInterface:
   def getAddress(_key: bytes32) -> address: view
+  def getBool(_key: bytes32) -> bool: view
   def getNodeWithdrawalAddress(_nodeAddress: address) -> address: view
   def confirmWithdrawalAddress(_nodeAddress: address): nonpayable
   def setWithdrawalAddress(_nodeAddress: address, _newWithdrawalAddress: address, _confirm: bool): nonpayable
+
+interface RocketNodeManagerInterface:
+  def getNodeRPLWithdrawalAddress(_nodeAddress: address) -> address: view
+  def getNodeRPLWithdrawalAddressIsSet(_nodeAddress: address) -> bool: view
+  def confirmRPLWithdrawalAddress(_nodeAddress: address): nonpayable
+  def setRPLWithdrawalAddress(_nodeAddress: address, _newRPLWithdrawalAddress: address, _confirm: bool): nonpayable
+  def unsetRPLWithdrawalAddress(_nodeAddress: address): nonpayable
+rocketNodeManagerKey: constant(bytes32) = keccak256("contract.addressrocketNodeManager")
 
 interface RocketNodeStakingInterface:
   def getNodeRPLStake(_nodeAddress: address) -> uint256: view
@@ -96,6 +105,8 @@ def createPool(_params: PoolParams) -> bytes32:
   self.pools[poolId].lender = msg.sender
   return poolId
 
+# TODO: use withdrawal fee instead of supply fee, and make it to a protocol address
+
 @internal
 def _supply(_poolId: bytes32, _amount: uint256, _feeAmount: uint256, _feeRecipient: address):
   assert _feeAmount * 100 <= _amount * MAX_FEE_PERCENT, "fee"
@@ -145,6 +156,12 @@ def _getRocketNodeStaking() -> RocketNodeStakingInterface:
   )
 
 @internal
+def _getRocketNodeManager() -> RocketNodeManagerInterface:
+  return RocketNodeManagerInterface(
+    rocketStorage.getAddress(rocketNodeManagerKey)
+  )
+
+@internal
 def _getMerkleDistributor() -> RocketMerkleDistributorInterface:
   return RocketMerkleDistributorInterface(
     rocketStorage.getAddress(rocketMerkleDistributorKey)
@@ -165,6 +182,26 @@ def confirmWithdrawalAddress(_node: address):
   rocketStorage.confirmWithdrawalAddress(_node)
   self.borrowerRPL[_node] = self._getRocketNodeStaking().getNodeRPLStake(_node)
   self.accountingInterval[_node] = self._getRewardsPool().getRewardIndex()
+
+@internal
+def _checkNotAllowedToStakeFor(_node: address):
+  assert not rocketStorage.getBool(
+    keccak256(concat(b"node.stake.for.allowed",
+                     convert(_node, bytes20),
+                     convert(self, bytes20)))), "sfa"
+
+# anyone can set this contract as the node's RPL withdrawal address
+# only works if this contract is already the node's primary withdrawal address
+@external
+def setRPLWithdrawalAddress(_node: address):
+  self._checkNotAllowedToStakeFor(_node)
+  self._getRocketNodeManager().setRPLWithdrawalAddress(_node, self, True)
+
+# anyone can confirm this contract as a node's RPL withdrawal address
+@external
+def confirmRPLWithdrawalAddress(_node: address):
+  self._checkNotAllowedToStakeFor(_node)
+  self._getRocketNodeManager().confirmRPLWithdrawalAddress(_node)
 
 # a borrower can change their withdrawal address for this contract
 # TODO: do we want pending and force logic for this?
@@ -188,10 +225,13 @@ def claimLenderRewards(_poolId: bytes32):
 @external
 def borrow(_poolId: bytes32, _amount: uint256, _node: address):
   assert _amount + self.totalBorrowedFromPool[_poolId] <= self.pools[_poolId].supplied, "bal"
-  assert rocketStorage.getNodeWithdrawalAddress(_node) == self, "wa"
-  # TODO: assert RPL withdrawal address for the node is not set
-  rocketNodeStaking: RocketNodeStakingInterface = self._getRocketNodeStaking()
-  rocketNodeStaking.stakeRPLFor(_node, _amount)
+  assert rocketStorage.getNodeWithdrawalAddress(_node) == self, "pwa"
+  assert self._getRocketNodeManager().getNodeRPLWithdrawalAddressIsSet(_node), "rws"
+  # unnecessary since stakeRPLFor will fail otherwise (since we did _checkNotAllowedToStakeFor)
+  # rocketNodeManager: RocketNodeManagerInterface = self._getRocketNodeManager()
+  # assert rocketNodeManager.getNodeRPLWithdrawalAddress(_node) == self, "rwa"
+  self._getRocketNodeStaking().stakeRPLFor(_node, _amount)
+  # TODO: increase borrowerRPL balance if necessary (i.e. if the node's staked RPL is greater than we expect)
   self.borrowed[_poolId][_node] += _amount
   self.totalBorrowedFromPool[_poolId] += _amount
   self.totalBorrowedByNode[_node] += _amount
@@ -204,9 +244,25 @@ def repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: u
   assert _amount == 0 or msg.sender == self.borrowerAddress[_node], "auth"
   total: uint256 = _amount + _amountSupplied
   assert total <= self.totalBorrowedByNode[_node], "bal"
+  rocketNodeStaking: RocketNodeStakingInterface = self._getRocketNodeStaking()
+  currentRPL: uint256 = rocketNodeStaking.getNodeRPLStake(_node)
+  # if currentRPL is not as expected it is because of some combination of:
+  # - RPL has been withdrawn
+  # - more borrower RPL has been staked
+  # but note: these can cancel out and we can't notice how much has happened of one vs the other
+  # one way would be to have a node-specific withdrawal address whose RPL balance can tell us something about what has been withdrawn
+  # another option would be to require borrowerRPL increases to be registered with us (for correct accounting)
+  # controlling the allow-list for staking RPL could be a reason to set us as the RPL withdrawal address...
+  # being RPL withdrawal address would also let us see RPL withdrawals directly
+
+  # if currentRPL < self.borrowerRPL:
+  # else:
+  #   lentAndStaked: uint256 = currentRPL - self.borrowerRPL
+  #   lentAndWithdrawn: uint256 = self.totalBorrowedByNode[_node] - lentAndStaked
+
   # TODO: update unclaimedRPL[_node] with any RPL that has been received by this contract
   # we have this information:
-  #  - borrowerRPL:         what the node's RPL stake was before we became the withdrawal address (and has not yet been returned)
+  #  - borrowerRPL:         what the node's RPL stake was before we became the withdrawal address (and has not yet been returned), plus any that was staked in the meantime
   #  - totalBorrowedByNode: what we have lent out to be staked and haven't received back yet
   #  - currentRPL:          what the node's current RPL stake is
   # from which we can calculate:
@@ -239,8 +295,22 @@ def claimBorrowerRewards(_node: address):
     send(msg.sender, self.unclaimedETH[_node], gas=msg.gas)
     self.unclaimedETH[_node] = 0
 
-@external
-def changeWithdrawalAddress(_node: address, _newAddress: address, _confirm: bool):
+@internal
+def _checkFinished(_node: address):
   assert msg.sender == _node or msg.sender == self.borrowerAddress[_node], "auth"
   assert self.totalBorrowedByNode[_node] == 0, "debt"
+
+@external
+def changeWithdrawalAddress(_node: address, _newAddress: address, _confirm: bool):
+  self._checkFinished(_node)
   rocketStorage.setWithdrawalAddress(_node, _newAddress, _confirm)
+
+@external
+def changeRPLWithdrawalAddress(_node: address, _newAddress: address, _confirm: bool):
+  self._checkFinished(_node)
+  self._getRocketNodeManager().setRPLWithdrawalAddress(_node, _newAddress, _confirm)
+
+@external
+def unsetRPLWithdrawalAddress(_node: address):
+  self._checkFinished(_node)
+  self._getRocketNodeManager().unsetRPLWithdrawalAddress(_node)
