@@ -144,27 +144,25 @@ def createPool(_params: PoolParams) -> bytes32:
 def _checkFromLender(_poolId: bytes32):
   assert msg.sender == self.lenderAddress[self.params[_poolId].lender], "auth"
 
-# TODO: use withdrawal fee instead of supply fee, and make it to a protocol address
-
 @internal
-def _supply(_poolId: bytes32, _amount: uint256, _feeAmount: uint256, _feeRecipient: address):
-  assert _feeAmount * 100 <= _amount * MAX_FEE_PERCENT, "fee"
-  supplyAmount: uint256 = _amount - _feeAmount
-  assert RPL.transferFrom(msg.sender, self, supplyAmount), "stf"
-  assert RPL.transferFrom(msg.sender, _feeRecipient, _feeAmount), "ftf"
-  self.pools[_poolId].supplied += supplyAmount
+def _supply(_poolId: bytes32, _amount: uint256):
+  assert RPL.transferFrom(msg.sender, self, _amount), "tf"
+  self.pools[_poolId].supplied += _amount
   # TODO: event
 
 # lender can supply RPL to one of their pools
 @external
-def supply(_poolId: bytes32, _amount: uint256, _feeAmount: uint256, _feeRecipient: address):
+def supply(_poolId: bytes32, _amount: uint256):
   self._checkFromLender(_poolId)
-  self._supply(_poolId, _amount, _feeAmount, _feeRecipient)
+  self._supply(_poolId, _amount)
 
 # supply RPL to a pool from another address
 @external
-def supplyOnBehalf(_poolId: bytes32, _amount: uint256, _feeAmount: uint256, _feeRecipient: address):
-  self._supply(_poolId, _amount, _feeAmount, _feeRecipient)
+def supplyOnBehalf(_poolId: bytes32, _amount: uint256):
+  self._supply(_poolId, _amount)
+
+# TODO: add withdrawal fee, need to track how much RPL was ever borrowed
+# TODO: add functions for admin to change withdrawal fee rate and recipient
 
 # lender can withdraw supplied RPL after the end time (assuming the loan has been repaid)
 @external
