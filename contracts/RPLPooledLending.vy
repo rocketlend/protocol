@@ -56,7 +56,13 @@ def __init__():
   rocketStorage = RocketStorageInterface(0x1d8f8f00cfa6758d7bE78336684788Fb0ee0Fa46)
   RPL = RPLInterface(rocketStorage.getAddress(keccak256("contract.addressrocketTokenRPL")))
 
+nextLenderId: public(uint256)
+
+lenderAddress: public(HashMap[uint256, address])
+pendingLenderAddress: public(HashMap[uint256, address])
+
 struct PoolParams:
+  lender: uint256
   feeNum: uint256
   feeDen: uint256
   endTime: uint256
@@ -64,7 +70,6 @@ struct PoolParams:
 params: public(HashMap[bytes32, PoolParams])
 
 struct PoolState:
-  lender: address
   supplied: uint256
   unclaimedETH: uint256
   unclaimedRPL: uint256
@@ -91,11 +96,38 @@ borrowerRPL: public(HashMap[address, uint256])
 #               have been claimed and processed by us up to but not including this index)
 accountingInterval: public(HashMap[address, uint256])
 
+@external
+def registerLender() -> uint256:
+  id: uint256 = self.nextLenderId
+  self.lenderAddress[id] = msg.sender
+  self.nextLenderId = id + 1
+  # TODO: event
+  return id
+
+@internal
+def _updateLenderAddress(_lender: uint256, _newAddress: address):
+  self.pendingLenderAddress[_lender] = empty(address)
+  self.lenderAddress[_lender] = _newAddress
+  # TODO: event
+
+@external
+def changeLenderAddress(_lender: uint256, _newAddress: address, _confirm: bool):
+  assert msg.sender == self.lenderAddress[_lender], "auth"
+  if _confirm:
+    self._updateLenderAddress(_lender, _newAddress)
+  else:
+    self.pendingLenderAddress[_lender] = _newAddress
+
+@external
+def confirmChangeLenderAddress(_lender: uint256):
+  assert msg.sender == self.pendingLenderAddress[_lender], "auth"
+  self._updateLenderAddress(_lender, msg.sender)
+
 # poolId is unique for a lender, fee fraction, and end time
 @internal
-def _poolId(_lender: address, _params: PoolParams) -> bytes32:
+def _poolId(_params: PoolParams) -> bytes32:
   return keccak256(concat(
-                     convert(_lender, bytes20),
+                     convert(_params.lender, bytes32),
                      convert(_params.feeNum, bytes32),
                      convert(_params.feeDen, bytes32),
                      convert(_params.endTime, bytes32)
@@ -103,10 +135,14 @@ def _poolId(_lender: address, _params: PoolParams) -> bytes32:
 
 @external
 def createPool(_params: PoolParams) -> bytes32:
-  poolId: bytes32 = self._poolId(msg.sender, _params)
-  self.pools[poolId].lender = msg.sender
+  assert msg.sender == self.lenderAddress[_params.lender], "auth"
+  poolId: bytes32 = self._poolId(_params)
   # TODO: event
   return poolId
+
+@internal
+def _checkFromLender(_poolId: bytes32):
+  assert msg.sender == self.lenderAddress[self.params[_poolId].lender], "auth"
 
 # TODO: use withdrawal fee instead of supply fee, and make it to a protocol address
 
@@ -122,7 +158,7 @@ def _supply(_poolId: bytes32, _amount: uint256, _feeAmount: uint256, _feeRecipie
 # lender can supply RPL to one of their pools
 @external
 def supply(_poolId: bytes32, _amount: uint256, _feeAmount: uint256, _feeRecipient: address):
-  assert msg.sender == self.pools[_poolId].lender, "auth"
+  self._checkFromLender(_poolId)
   self._supply(_poolId, _amount, _feeAmount, _feeRecipient)
 
 # supply RPL to a pool from another address
@@ -133,7 +169,7 @@ def supplyOnBehalf(_poolId: bytes32, _amount: uint256, _feeAmount: uint256, _fee
 # lender can withdraw supplied RPL after the end time (assuming the loan has been repaid)
 @external
 def withdraw(_poolId: bytes32):
-  assert msg.sender == self.pools[_poolId].lender, "auth"
+  self._checkFromLender(_poolId)
   assert self.params[_poolId].endTime <= block.timestamp, "term"
   assert self.totalBorrowedFromPool[_poolId] == 0, "debt"
   assert RPL.transfer(msg.sender, self.pools[_poolId].supplied), "t"
@@ -143,7 +179,7 @@ def withdraw(_poolId: bytes32):
 # lender can withdraw supplied RPL that has not been borrowed, possibly before the end time
 @external
 def withdrawExcess(_poolId: bytes32, _amount: uint256):
-  assert msg.sender == self.pools[_poolId].lender, "auth"
+  self._checkFromLender(_poolId)
   assert _amount <= self.pools[_poolId].supplied - self.totalBorrowedFromPool[_poolId], "bal"
   assert RPL.transfer(msg.sender, _amount), "t"
   self.pools[_poolId].supplied -= _amount
@@ -155,6 +191,8 @@ def withdrawExcess(_poolId: bytes32, _amount: uint256):
 # TODO: - distribute minipool balances (allocate stake to borrower, take fees on the rest)
 # TODO: function to indicate that merkle rewards have been claimed, if not claimed via this contract (take fees)
 # TODO: function to withdraw borrower RPL
+
+# TODO: accounting for proportion of staked RPL, including as it changes, for fee calculation
 
 @internal
 def _getRocketNodeStaking() -> RocketNodeStakingInterface:
@@ -222,7 +260,7 @@ def confirmChangeBorrowerAddress(_node: address):
 # (which is the withdrawal address for borrowing nodes)
 @external
 def claimLenderRewards(_poolId: bytes32):
-  assert msg.sender == self.pools[_poolId].lender, "auth"
+  self._checkFromLender(_poolId)
   if 0 < self.pools[_poolId].unclaimedRPL:
     assert RPL.transfer(msg.sender, self.pools[_poolId].unclaimedRPL), "t"
     self.pools[_poolId].unclaimedRPL = 0
