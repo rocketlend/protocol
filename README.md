@@ -93,6 +93,7 @@ Lenders can use the RPL protocol contract to:
   borrowed from one of the lender's pools
 - Claim fees from the proportional ETH rewards of nodes whose RPL stake is (in
   part) borrowed from one of the lender's pools
+- Withdraw borrowed RPL from a node after the end time of the lending pool
 - Claim penalties from any borrower that has defaulted on a loan from one of
   the lender's pools
 
