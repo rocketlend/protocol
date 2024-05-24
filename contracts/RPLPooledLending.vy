@@ -3,6 +3,7 @@
 interface RPLInterface:
   def transfer(_to: address, _value: uint256) -> bool: nonpayable
   def transferFrom(_from: address, _to: address, _value: uint256) -> bool: nonpayable
+  def approve(_spender: address, _value: uint256) -> bool: nonpayable
 
 interface RocketStorageInterface:
   def getAddress(_key: bytes32) -> address: view
@@ -183,15 +184,6 @@ def withdrawExcess(_poolId: bytes32, _amount: uint256):
   self.pools[_poolId].supplied -= _amount
   # TODO: event
 
-# TODO: add optional pathways for claiming funds via withdrawal address:
-# TODO: - claim merkle rewards (take fees)
-# TODO: - distribute fee distributor balance (take fees)
-# TODO: - distribute minipool balances (allocate stake to borrower, take fees on the rest)
-# TODO: function to indicate that merkle rewards have been claimed, if not claimed via this contract (take fees)
-# TODO: function to withdraw borrower RPL
-
-# TODO: accounting for proportion of staked RPL, including as it changes, for fee calculation
-
 @internal
 def _getRocketNodeStaking() -> RocketNodeStakingInterface:
   return RocketNodeStakingInterface(
@@ -215,6 +207,28 @@ def _getRewardsPool() -> RocketRewardsPoolInterface:
   return RocketRewardsPoolInterface(
     rocketStorage.getAddress(rocketRewardsPoolKey)
   )
+
+# TODO: add pathways for claiming funds via withdrawal address:
+# TODO: - claim merkle rewards (take fees)
+# TODO: - distribute fee distributor balance (take fees)
+# TODO: - distribute minipool balances (allocate stake to borrower, take fees on the rest)
+# TODO: function to indicate that merkle rewards have been claimed, if not
+#       claimed via this contract (should only be for RPL, since ETH would have been
+#       blocked)
+# TODO: function to withdraw borrower RPL
+
+@internal
+def _stakeRPLFor(_node: address, _amount: uint256):
+  rocketNodeStaking: RocketNodeStakingInterface = self._getRocketNodeStaking()
+  assert RPL.approve(rocketNodeStaking.address, _amount), "a"
+  rocketNodeStaking.stakeRPLFor(_node, _amount)
+
+# a borrower can stake their own RPL (not borrowed from the protocol) on their node
+@external
+def stakeRPLFor(_node: address, _amount: uint256):
+  assert msg.sender == self.borrowerAddress[_node], "auth"
+  self._stakeRPLFor(_node, _amount)
+  self.borrowerRPL[_node] += _amount
 
 # anyone can confirm this contract as a node's withdrawal address
 # sets the borrower's withdrawal address as the node's withdrawal address prior to this contract
@@ -275,7 +289,7 @@ def borrow(_poolId: bytes32, _amount: uint256, _node: address):
   # the commented out assert is unnecessary since stakeRPLFor will fail otherwise
   # rocketNodeManager: RocketNodeManagerInterface = self._getRocketNodeManager()
   # assert rocketNodeManager.getNodeRPLWithdrawalAddress(_node) == self, "rwa"
-  self._getRocketNodeStaking().stakeRPLFor(_node, _amount)
+  self._stakeRPLFor(_node, _amount)
   self.borrowed[_poolId][_node] += _amount
   self.totalBorrowedFromPool[_poolId] += _amount
   self.totalBorrowedByNode[_node] += _amount
