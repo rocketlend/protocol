@@ -57,6 +57,12 @@ def __init__():
   rocketStorage = RocketStorageInterface(0x1d8f8f00cfa6758d7bE78336684788Fb0ee0Fa46)
   RPL = RPLInterface(rocketStorage.getAddress(keccak256("contract.addressrocketTokenRPL")))
 
+allowPaymentsFrom: address
+@external
+@payable
+def __default__():
+  assert msg.sender == self.allowPaymentsFrom, "auth"
+
 nextLenderId: public(uint256)
 
 lenderAddress: public(HashMap[uint256, address])
@@ -89,9 +95,11 @@ pendingBorrowerAddress: public(HashMap[address, address])
 # nodeAddress: amounts unclaimed by borrowerAddress[nodeAddress]
 unclaimedETH: public(HashMap[address, uint256])
 unclaimedRPL: public(HashMap[address, uint256])
+
 # nodeAddress: amount of staked RPL belonging wholly to the borrower, not borrowed from any of our pools
 #              (when we can determine this has been unstaked, we move the unstaked portion to unclaimedRPL)
 borrowerRPL: public(HashMap[address, uint256])
+
 # nodeAddress: next rewards interval index we need to account for for this node
 #              (all Merkle rewards claims that include any funds belonging to our pools
 #               have been claimed and processed by us up to but not including this index)
@@ -215,7 +223,6 @@ def _getRewardsPool() -> RocketRewardsPoolInterface:
 # TODO: function to indicate that merkle rewards have been claimed, if not
 #       claimed via this contract (should only be for RPL, since ETH would have been
 #       blocked)
-# TODO: function to withdraw borrower RPL
 
 @internal
 def _stakeRPLFor(_node: address, _amount: uint256):
@@ -223,12 +230,23 @@ def _stakeRPLFor(_node: address, _amount: uint256):
   assert RPL.approve(rocketNodeStaking.address, _amount), "a"
   rocketNodeStaking.stakeRPLFor(_node, _amount)
 
-# a borrower can stake their own RPL (not borrowed from the protocol) on their node
+# borrower can stake their own RPL (not borrowed from the protocol) on their node
 @external
 def stakeRPLFor(_node: address, _amount: uint256):
   assert msg.sender == self.borrowerAddress[_node], "auth"
   self._stakeRPLFor(_node, _amount)
   self.borrowerRPL[_node] += _amount
+
+# borrower can withdraw their own RPL, as long as enough staked RPL is left to
+# cover their debt
+@external
+def withdrawRPL(_node: address, _amount: uint256):
+  assert msg.sender == self.borrowerAddress[_node], "auth"
+  self.borrowerRPL[_node] -= _amount
+  rocketNodeStaking: RocketNodeStakingInterface = self._getRocketNodeStaking()
+  rocketNodeStaking.withdrawRPL(_node, _amount)
+  assert self.totalBorrowedByNode[_node] <= rocketNodeStaking.getNodeRPLStake(_node), "bal"
+  assert RPL.transfer(msg.sender, _amount), "t"
 
 # anyone can confirm this contract as a node's withdrawal address
 # sets the borrower's withdrawal address as the node's withdrawal address prior to this contract
