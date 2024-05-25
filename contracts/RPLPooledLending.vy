@@ -142,11 +142,23 @@ def __default__():
 
 # Protocol actions
 
+event UpdateAdmin:
+  old: indexed(address)
+  new: indexed(address)
+
+event UpdateFeePercent:
+  old: indexed(uint256)
+  new: indexed(uint256)
+
+event WithdrawFees:
+  recipient: indexed(address)
+  amount: indexed(uint256)
+
 @internal
 def _updateAdminAddress(_newAddress: address):
   self.protocol.pending = empty(address)
+  log UpdateAdmin(self.protocol.address, _newAddress)
   self.protocol.address = _newAddress
-  # TODO: event
 
 @external
 def changeAdminAddress(_newAddress: address, _confirm: bool):
@@ -165,31 +177,59 @@ def confirmChangeAdminAddress():
 def updateFeePercent(_newPercent: uint256):
   assert msg.sender == self.protocol.address, "auth"
   assert _newPercent <= MAX_FEE_PERCENT, "max"
+  log UpdateFeePercent(self.protocol.feePercent, _newPercent)
   self.protocol.feePercent = _newPercent
-  # TODO: event
 
 @external
 def withdrawFees():
   assert msg.sender == self.protocol.address, "auth"
   assert RPL.transfer(msg.sender, self.protocol.fees), "t"
+  log WithdrawFees(msg.sender, self.protocol.fees)
   self.protocol.fees = 0
-  # TODO: event?
 
 # Lender actions
+
+event RegisterLender:
+  id: indexed(uint256)
+  address: indexed(address)
+
+event UpdateLender:
+  id: indexed(uint256)
+  old: indexed(address)
+  new: indexed(address)
+
+event CreatePool:
+  id: indexed(bytes32)
+  params: PoolParams
+
+event SupplyPool:
+  id: indexed(bytes32)
+  amount: indexed(uint256)
+  total: indexed(uint256)
+
+event WithdrawFromPool:
+  id: indexed(bytes32)
+  amount: indexed(uint256)
+  total: indexed(uint256)
+
+event WithdrawEtherFromPool:
+  id: indexed(bytes32)
+  amount: indexed(uint256)
+  total: indexed(uint256)
 
 @external
 def registerLender() -> uint256:
   id: uint256 = self.nextLenderId
   self.lenderAddress[id] = msg.sender
   self.nextLenderId = id + 1
-  # TODO: event
+  log RegisterLender(id, msg.sender)
   return id
 
 @internal
 def _updateLenderAddress(_lender: uint256, _newAddress: address):
   self.pendingLenderAddress[_lender] = empty(address)
+  log UpdateLender(_lender, self.lenderAddress[_lender], _newAddress)
   self.lenderAddress[_lender] = _newAddress
-  # TODO: event
 
 @external
 def changeLenderAddress(_lender: uint256, _newAddress: address, _confirm: bool):
@@ -216,7 +256,7 @@ def _poolId(_params: PoolParams) -> bytes32:
 def createPool(_params: PoolParams) -> bytes32:
   assert msg.sender == self.lenderAddress[_params.lender], "auth"
   poolId: bytes32 = self._poolId(_params)
-  # TODO: event
+  log CreatePool(poolId, _params)
   return poolId
 
 @internal
@@ -227,7 +267,7 @@ def _checkFromLender(_poolId: bytes32):
 def _supplyPool(_poolId: bytes32, _amount: uint256):
   assert RPL.transferFrom(msg.sender, self, _amount), "tf"
   self.pools[_poolId].available += _amount
-  # TODO: event
+  log SupplyPool(_poolId, _amount, self.pools[_poolId].available)
 
 @external
 def supplyPool(_poolId: bytes32, _amount: uint256):
@@ -243,16 +283,16 @@ def withdrawFromPool(_poolId: bytes32, _amount: uint256):
   self._checkFromLender(_poolId)
   self.pools[_poolId].available -= _amount
   assert RPL.transfer(msg.sender, _amount), "t"
-  # TODO: event
+  log WithdrawFromPool(_poolId, _amount, self.pools[_poolId].available)
 
 # TODO: liquidation actions for RPL and ETH
 
 @external
-def withdrawETHFromPool(_poolId: bytes32, _amount: uint256):
+def withdrawEtherFromPool(_poolId: bytes32, _amount: uint256):
   self._checkFromLender(_poolId)
   self.pools[_poolId].reclaimed -= _amount
   send(msg.sender, _amount, gas=msg.gas)
-  # TODO: event
+  log WithdrawEtherFromPool(_poolId, _amount, self.pools[_poolId].reclaimed)
 
 # Borrower actions
 
