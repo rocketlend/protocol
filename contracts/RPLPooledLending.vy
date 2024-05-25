@@ -1,6 +1,7 @@
 #pragma version ^0.3.0
 
 interface RPLInterface:
+  def decimals() -> uint8: view
   def transfer(_to: address, _value: uint256) -> bool: nonpayable
   def transferFrom(_from: address, _to: address, _value: uint256) -> bool: nonpayable
   def approve(_spender: address, _value: uint256) -> bool: nonpayable
@@ -124,11 +125,14 @@ struct BorrowerState:
 borrowers: public(HashMap[address, BorrowerState])
 intervals: public(HashMap[address, HashMap[uint256, bool]]) # intervals known to be claimed (up to borrowers[_].index)
 
+oneRPL: immutable(uint256)
+
 @external
 def __init__():
   rocketStorage = RocketStorageInterface(0x1d8f8f00cfa6758d7bE78336684788Fb0ee0Fa46)
   RPL = RPLInterface(rocketStorage.getAddress(keccak256("contract.addressrocketTokenRPL")))
   self.protocol.address = msg.sender
+  oneRPL = 10 ** convert(RPL.decimals(), uint256)
 
 allowPaymentsFrom: address
 @external
@@ -342,48 +346,86 @@ def withdrawRPL(_node: address, _amount: uint256):
   self.borrowers[_node].RPL += _amount
   # TODO: event?
 
-# @external
-# def borrow(_poolId: bytes32, _amount: uint256, _node: address):
-#   assert _amount + self.totalBorrowedFromPool[_poolId] <= self.pools[_poolId].supplied, "bal"
-#   assert rocketStorage.getNodeWithdrawalAddress(_node) == self, "pwa"
-#   assert self._getRocketNodeManager().getNodeRPLWithdrawalAddressIsSet(_node), "rws"
-#   # the commented out assert is unnecessary since stakeRPLFor will fail otherwise
-#   # rocketNodeManager: RocketNodeManagerInterface = self._getRocketNodeManager()
-#   # assert rocketNodeManager.getNodeRPLWithdrawalAddress(_node) == self, "rwa"
-#   self._stakeRPLFor(_node, _amount)
-#   self.borrowed[_poolId][_node] += _amount
-#   self.totalBorrowedFromPool[_poolId] += _amount
-#   self.totalBorrowedByNode[_node] += _amount
-#   # TODO: event
-#
-# @external
-# def repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: uint256):
-#   assert _amount == 0 or msg.sender == self.borrowerAddress[_node], "auth"
-#   total: uint256 = _amount + _amountSupplied
-#   assert total <= self.totalBorrowedByNode[_node], "balb"
-#   rocketNodeStaking: RocketNodeStakingInterface = self._getRocketNodeStaking()
-#   stakedRPL: uint256 = rocketNodeStaking.getNodeRPLStake(_node)
-#   assert _amount <= stakedRPL, "bals"
-#   if stakedRPL > self.borrowerRPL[_node] + self.totalBorrowedByNode[_node]:
-#     # someone else must have staked RPL on behalf of the node
-#     # return the excess to the borrower (TODO: we or the lender could take a cut of this?)
-#     self.borrowerRPL[_node] = stakedRPL - self.totalBorrowedByNode[_node]
-#   # TODO: handle case of RPL slashed
-#   if 0 < _amount:
-#     rocketNodeStaking.withdrawRPL(_node, _amount)
-#   if 0 < _amountSupplied:
-#     assert RPL.transferFrom(msg.sender, self, _amountSupplied), "tf"
-#   self.totalBorrowedByNode[_node] -= total
-#   self.totalBorrowedFromPool[_poolId] -= total
-#   # TODO: event
-#
-# @external
-# def claimBorrowerRewards(_node: address):
-#   assert msg.sender == self.borrowerAddress[_node], "auth"
-#   if 0 < self.unclaimedRPL[_node]:
-#     assert RPL.transfer(msg.sender, self.unclaimedRPL[_node]), "t"
-#     self.unclaimedRPL[_node] = 0
-#   if 0 < self.unclaimedETH[_node]:
-#     send(msg.sender, self.unclaimedETH[_node], gas=msg.gas)
-#     self.unclaimedETH[_node] = 0
-#   # TODO: event
+@internal
+@view
+def _effectiveEndTime(_poolId: bytes32) -> uint256:
+  return min(self.params[_poolId].endTime, block.timestamp)
+
+@internal
+@view
+def _outstandingInterest(_poolId: bytes32, _node: address, _endTime: uint256) -> uint256:
+  return (self.loans[_poolId][_node].borrowed
+          * self.params[_poolId].interestRate
+          * (_endTime - self.loans[_poolId][_node].startTime)
+          / oneRPL)
+
+@internal
+def _chargeInterest(_poolId: bytes32, _node: address, _amount: uint256):
+  if 0 < _amount:
+    self.loans[_poolId][_node].interest += _amount
+    self.borrowers[_node].interest += _amount
+    self.pools[_poolId].interest += _amount
+
+@internal
+def _repayInterest(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
+  if 0 < _amount:
+    self.loans[_poolId][_node].interest -= _amount
+    self.borrowers[_node].interest -= _amount
+    self.pools[_poolId].interest -= _amount
+  return _amount
+
+@internal
+def _lend(_poolId: bytes32, _node: address, _amount: uint256):
+  if 0 < _amount:
+    self.loans[_poolId][_node].borrowed += _amount
+    self.borrowers[_node].borrowed += _amount
+    self.pools[_poolId].available -= _amount
+    self.pools[_poolId].borrowed += _amount
+
+@internal
+def _repay(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
+  if 0 < _amount:
+    self.loans[_poolId][_node].borrowed -= _amount
+    self.borrowers[_node].borrowed -= _amount
+    self.pools[_poolId].available += _amount
+    self.pools[_poolId].borrowed -= _amount
+    # TODO: charge protocol fee here
+  return _amount
+
+@external
+def borrow(_poolId: bytes32, _amount: uint256, _node: address):
+  assert rocketStorage.getNodeWithdrawalAddress(_node) == self, "pwa"
+  assert self._getRocketNodeManager().getNodeRPLWithdrawalAddressIsSet(_node), "rws"
+  # the commented out assert is unnecessary since stakeRPLFor will fail otherwise
+  # rocketNodeManager: RocketNodeManagerInterface = self._getRocketNodeManager()
+  # assert rocketNodeManager.getNodeRPLWithdrawalAddress(_node) == self, "rwa"
+  assert block.timestamp < self.params[_poolId].endTime, "end"
+  self._stakeRPLFor(_node, _amount)
+  self._chargeInterest(_poolId, _node, self._outstandingInterest(_poolId, _node, block.timestamp))
+  self.loans[_poolId][_node].startTime = block.timestamp
+  self._lend(_poolId, _node, _amount)
+  # TODO: event
+
+@external
+def repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: uint256):
+  assert _amount == 0 or msg.sender == self.borrowers[_node].address, "auth"
+  endTime: uint256 = self._effectiveEndTime(_poolId)
+  self._chargeInterest(_poolId, _node, self._outstandingInterest(_poolId, _node, endTime))
+  self.loans[_poolId][_node].startTime = endTime
+  rocketNodeStaking: RocketNodeStakingInterface = self._getRocketNodeStaking()
+  available: uint256 = 0
+  if self.borrowers[_node].RPL < _amount:
+    rocketNodeStaking.withdrawRPL(_node, _amount - self.borrowers[_node].RPL)
+    self.borrowers[_node].RPL = _amount
+  self.borrowers[_node].RPL -= _amount
+  available += _amount
+  if 0 < _amountSupplied:
+    assert RPL.transferFrom(msg.sender, self, _amountSupplied), "tf"
+    available += _amountSupplied
+  if available <= self.loans[_poolId][_node].interest:
+    available -= self._repayInterest(_poolId, _node, available)
+  else:
+    available -= self._repayInterest(_poolId, _node, self.loans[_poolId][_node].interest)
+    available -= self._repay(_poolId, _node, available)
+  assert available == 0, "bal"
+  # TODO: event
