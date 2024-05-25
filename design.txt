@@ -1,0 +1,94 @@
+loan pool params:
+- lender
+- interest rate
+- end time
+
+loan pool state:
+- amount available
+- amount borrowed
+- unpaid interest (not including ongoing)
+- ETH reclaimed
+
+protocol state:
+- accumulated protocol fee
+
+borrower's state per loan pool:
+- amount borrowed
+- start time
+- unpaid interest (not including implied by the amount above)
+
+borrower's state:
+- total amount borrowed
+- total unpaid interest
+- withdrawn RPL (available for repaying debts, and fully withdrawable beyond that)
+- withdrawn ETH (held as needed to cover any potential defaults)
+- accounted-for claimed intervals:
+  - mapping of interval index to bool (true = claimed)
+  - index up to which the mapping is known to be correct
+  - range between known index and current index is updated whenever node withdrawal address is set to us
+  - note: requires us to put an upper bound on intervals for all time (conservatively, use 100+ years' worth)
+- address
+
+Flows:
+- Lender supplies RPL to a pool
+  - amount available goes up
+
+- Lender withdraws RPL from a pool
+  - amount available goes down
+
+- Lender force repays RPL for a borrower in an ended pool with outstanding debt
+  - withdrawn RPL goes down
+  - unpaid interest goes down
+  - amount borrowed goes down
+  - amount available goes up, minus protocol fee
+
+- Lender force repays ETH for a borrower in an ended pool with outstanding debt
+  - withdrawn ETH goes down
+  - unpaid interest goes down
+  - amount borrowed goes down
+  - ETH reclaimed goes up (accounting is at current RPL price)
+
+- Lender withdraws reclaimed ETH from a pool
+  - reclaimed ETH goes down
+
+- Borrower borrows RPL from pool to stake on their node
+  - amount available goes down
+  - pool amount borrowed goes up
+  - borrower amount borrowed goes up
+  - borrower total amount borrowed goes up
+  - borrower start time reset
+  - borrower unpaid interest added (for previous amount borrowed)
+  - lender unpaid interest added in line with above
+  - borrower total unpaid interest added
+
+- Borrower repays RPL to a pool
+  - unpaid interest goes down
+  - amount borrowed possibly goes down
+  - if amount borrowed changed, start time recalculated and unpaid interest increased accordingly
+  - loan unpaid interest adjusted
+  - borrower total unpaid interest adjusted
+  - borrower total amount borrowed possibly goes down
+  - loan amount borrowed possibly goes down
+  - loan amount available goes up, minus protocol fee
+  - accumulated protocol fee goes up
+
+- Borrower stakes their own RPL on their node
+
+- Borrower withdraws RPL from their node
+  - withdrawn RPL goes up
+
+- Borrower claims Merkle rewards (or demonstrates external claim(s))
+  - withdrawn RPL goes up
+  - withdrawn ETH goes up
+  - claimed intervals info updates
+
+- Borrower distributes ETH from their fee distributor and/or from minipools
+  - withdrawn ETH goes up
+
+- Borrower withdraws unclaimed ETH or RPL
+  - note: their total debt must be zero
+  - withdrawn ETH goes down
+  - withdrawn RPL goes down
+
+- Protocol admin retrieves fees
+  - accumulated protocol fee goes down
