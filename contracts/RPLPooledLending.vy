@@ -296,6 +296,33 @@ def withdrawEtherFromPool(_poolId: bytes32, _amount: uint256):
 
 # Borrower actions
 
+event UpdateBorrower:
+  node: indexed(address)
+  old: indexed(address)
+  new: indexed(address)
+
+event JoinProtocol:
+  node: indexed(address)
+
+event WithdrawRPL:
+  node: indexed(address)
+  amount: indexed(uint256)
+  total: indexed(uint256)
+
+event Borrow:
+  pool: indexed(bytes32)
+  node: indexed(address)
+  amount: indexed(uint256)
+  borrowed: uint256
+  interest: uint256
+
+event Repay:
+  pool: indexed(bytes32)
+  node: indexed(address)
+  amount: indexed(uint256)
+  borrowed: uint256
+  interest: uint256
+
 @internal
 def _checkFromBorrower(_node: address):
   assert msg.sender == self.borrowers[_node].address, "auth"
@@ -303,8 +330,8 @@ def _checkFromBorrower(_node: address):
 @internal
 def _updateBorrowerAddress(_node: address, _newAddress: address):
   self.borrowers[_node].pending = empty(address)
+  log UpdateBorrower(_node, self.borrowers[_node].address, _newAddress)
   self.borrowers[_node].address = _newAddress
-  # TODO: event
 
 @external
 def changeBorrowerAddress(_node: address, _newAddress: address, _confirm: bool):
@@ -345,7 +372,7 @@ def confirmWithdrawalAddress(_node: address):
     self.intervals[_node][index] = rocketMerkleDistributor.isClaimed(index, _node)
     index += 1
   self.borrowers[_node].index = index
-  # TODO: event
+  log JoinProtocol(_node)
 
 @internal
 def _checkFinished(_node: address):
@@ -384,7 +411,7 @@ def withdrawRPL(_node: address, _amount: uint256):
   self._checkFromBorrower(_node)
   self._getRocketNodeStaking().withdrawRPL(_node, _amount)
   self.borrowers[_node].RPL += _amount
-  # TODO: event?
+  log WithdrawRPL(_node, _amount, self.borrowers[_node].RPL)
 
 @internal
 @view
@@ -433,7 +460,7 @@ def _repay(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
   return _amount
 
 @external
-def borrow(_poolId: bytes32, _amount: uint256, _node: address):
+def borrow(_poolId: bytes32, _node: address, _amount: uint256):
   assert rocketStorage.getNodeWithdrawalAddress(_node) == self, "pwa"
   assert self._getRocketNodeManager().getNodeRPLWithdrawalAddressIsSet(_node), "rws"
   # the commented out assert is unnecessary since stakeRPLFor will fail otherwise
@@ -444,7 +471,9 @@ def borrow(_poolId: bytes32, _amount: uint256, _node: address):
   self._chargeInterest(_poolId, _node, self._outstandingInterest(_poolId, _node, block.timestamp))
   self.loans[_poolId][_node].startTime = block.timestamp
   self._lend(_poolId, _node, _amount)
-  # TODO: event
+  log Borrow(_poolId, _node, _amount,
+             self.loans[_poolId][_node].borrowed,
+             self.loans[_poolId][_node].interest)
 
 @external
 def repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: uint256):
@@ -468,4 +497,8 @@ def repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: u
     available -= self._repayInterest(_poolId, _node, self.loans[_poolId][_node].interest)
     available -= self._repay(_poolId, _node, available)
   assert available == 0, "bal"
-  # TODO: event
+  log Repay(_poolId, _node, _amount + _amountSupplied,
+            self.loans[_poolId][_node].borrowed,
+            self.loans[_poolId][_node].interest)
+
+# TODO: rewards claiming and distribution actions
