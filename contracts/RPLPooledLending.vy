@@ -285,7 +285,27 @@ def withdrawFromPool(_poolId: bytes32, _amount: uint256):
   assert RPL.transfer(msg.sender, _amount), "t"
   log WithdrawFromPool(_poolId, _amount, self.pools[_poolId].available)
 
-# TODO: liquidation actions for RPL and ETH
+@external
+def forceRepayRPL(_poolId: bytes32, _node: address):
+  endTime: uint256 = self.pools[_poolId].endTime
+  assert endTime < block.timestamp, "term"
+  if self.loans[_poolId][_node].startTime < endTime:
+    self._chargeInterest(_poolId, _node, self._outstandingInterest(_poolId, _node, endTime))
+    self.loans[_poolId][_node].startTime = endTime
+  available: uint256 = self.borrowers[_node].RPL
+  if available <= self.loans[_poolId][_node].interest:
+    available -= self._repayInterest(_poolId, _node, available)
+  else:
+    available -= self._repayInterest(_poolId, _node, self.loans[_poolId][_node].interest)
+    available -= self._repay(_poolId, _node, min(available, self.loans[_poolId][_node].borrowed))
+  assert available < self.borrowers[_node].RPL, "none"
+  self.borrowers[_node].RPL = available
+  # TODO: event
+
+# TODO: withdraw RPL for liquidation
+# TODO: claim Merkle rewards for liquidation
+# TODO: distribute ETH for liquidation
+# TODO: force repay ETH
 
 @external
 def withdrawEtherFromPool(_poolId: bytes32, _amount: uint256):
