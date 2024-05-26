@@ -1,5 +1,10 @@
 #pragma version ^0.3.0
 
+MAX_TOTAL_INTERVALS: constant(uint256) = 2048 # 170+ years
+MAX_CLAIM_INTERVALS: constant(uint256) = 128 # ~10 years
+MAX_PROOF_LENGTH: constant(uint256) = 32 # ~ 4 billion claimers
+MAX_FEE_PERCENT: constant(uint256) = 25
+
 interface RPLInterface:
   def decimals() -> uint8: view
   def transfer(_to: address, _value: uint256) -> bool: nonpayable
@@ -21,8 +26,13 @@ interface RocketNodeManagerInterface:
   def unsetRPLWithdrawalAddress(_nodeAddress: address): nonpayable
 rocketNodeManagerKey: constant(bytes32) = keccak256("contract.addressrocketNodeManager")
 
+interface RocketNodeDepositInterface:
+  def getNodeEthBalance(_nodeAddress: address) -> uint256: view
+rocketNodeDepositKey: constant(bytes32) = keccak256("contract.addressrocketNodeDeposit")
+
 interface RocketNodeStakingInterface:
   def getNodeRPLStake(_nodeAddress: address) -> uint256: view
+  def getNodeETHProvided(_nodeAddress: address) -> uint256: view
   def stakeRPLFor(_nodeAddress: address, _amount: uint256): nonpayable
   def withdrawRPL(_nodeAddress: address, _amount: uint256): nonpayable
 rocketNodeStakingKey: constant(bytes32) = keccak256("contract.addressrocketNodeStaking")
@@ -31,10 +41,9 @@ interface RocketRewardsPoolInterface:
   def getRewardIndex() -> uint256: view
 rocketRewardsPoolKey: constant(bytes32) = keccak256("contract.addressrocketRewardsPool")
 
-MAX_TOTAL_INTERVALS: constant(uint256) = 2048 # 170+ years
-MAX_CLAIM_INTERVALS: constant(uint256) = 128 # ~10 years
-MAX_PROOF_LENGTH: constant(uint256) = 32 # ~ 4 billion claimers
-MAX_FEE_PERCENT: constant(uint256) = 25
+interface RocketNetworkPricesInterface:
+  def getRPLPrice() -> uint256: view
+rocketNetworkPricesKey: constant(bytes32) = keccak256("contract.addressrocketNetworkPrices")
 
 interface RocketMerkleDistributorInterface:
   def isClaimed(_rewardIndex: uint256, _nodeAddress: address) -> bool: view
@@ -46,31 +55,66 @@ interface RocketMerkleDistributorInterface:
             _stakeAmount: uint256): nonpayable
 rocketMerkleDistributorKey: constant(bytes32) = keccak256("contract.addressrocketMerkleDistributorMainnet")
 
+interface RocketNodeDistributorFactoryInterface:
+  def getProxyAddress(_nodeAddress: address) -> address: view
+rocketNodeDistributorFactoryKey: constant(bytes32) = keccak256("contract.addressrocketNodeDistributorFactory")
+
+interface RocketNodeDistributorInterface:
+  def getNodeShare() -> uint256: view
+  def distribute(): nonpayable
+
 RPL: public(immutable(RPLInterface))
 rocketStorage: public(immutable(RocketStorageInterface))
 
 @internal
+@view
 def _getRocketNodeStaking() -> RocketNodeStakingInterface:
   return RocketNodeStakingInterface(
     rocketStorage.getAddress(rocketNodeStakingKey)
   )
 
 @internal
+@view
+def _getRocketNodeDeposit() -> RocketNodeDepositInterface:
+  return RocketNodeDepositInterface(
+    rocketStorage.getAddress(rocketNodeDepositKey)
+  )
+
+@internal
+@view
 def _getRocketNodeManager() -> RocketNodeManagerInterface:
   return RocketNodeManagerInterface(
     rocketStorage.getAddress(rocketNodeManagerKey)
   )
 
 @internal
+@view
 def _getMerkleDistributor() -> RocketMerkleDistributorInterface:
   return RocketMerkleDistributorInterface(
     rocketStorage.getAddress(rocketMerkleDistributorKey)
   )
 
 @internal
+@view
 def _getRewardsPool() -> RocketRewardsPoolInterface:
   return RocketRewardsPoolInterface(
     rocketStorage.getAddress(rocketRewardsPoolKey)
+  )
+
+@internal
+@view
+def _getRocketNetworkPrices() -> RocketNetworkPricesInterface:
+  return RocketNetworkPricesInterface(
+    rocketStorage.getAddress(rocketNetworkPricesKey)
+  )
+
+@internal
+@view
+def _getNodeDistributor(_node: address) -> RocketNodeDistributorInterface:
+  return RocketNodeDistributorInterface(
+    RocketNodeDistributorFactoryInterface(
+      rocketStorage.getAddress(rocketNodeDistributorFactoryKey)
+    ).getProxyAddress(_node)
   )
 
 struct ProtocolState:
@@ -474,6 +518,13 @@ def _repay(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
     # TODO: charge protocol fee here
   return _amount
 
+@internal
+@view
+def _availableEther(_node: address) -> uint256:
+  return (self._getRocketNodeStaking().getNodeETHProvided(_node)
+          + self._getRocketNodeDeposit().getNodeEthBalance(_node)
+          + self.borrowers[_node].ETH)
+
 @external
 def borrow(_poolId: bytes32, _node: address, _amount: uint256):
   assert rocketStorage.getNodeWithdrawalAddress(_node) == self, "pwa"
@@ -485,7 +536,7 @@ def borrow(_poolId: bytes32, _node: address, _amount: uint256):
   self._stakeRPLFor(_node, _amount)
   self._chargeInterest(_poolId, _node, self._outstandingInterest(_poolId, _node, block.timestamp))
   self.loans[_poolId][_node].startTime = block.timestamp
-  # TODO: add borrow limit check: node must have enough ETH (bonded + supplied) to cover the total borrowed RPL + interest
+  # TODO: add borrow limit check: node must have enough ETH (bonded + supplied) to cover the total borrowed (minus unclaimed) RPL + interest
   self._lend(_poolId, _node, _amount)
   log Borrow(_poolId, _node, _amount,
              self.loans[_poolId][_node].borrowed,
@@ -543,3 +594,4 @@ def claimMerkleRewards(
 
 # TODO: borrower distribute fee distributor
 # TODO: borrower distribute minipool balances
+# TODO: withdraw borrower ETH and RPL from protocol
