@@ -286,13 +286,18 @@ def withdrawFromPool(_poolId: bytes32, _amount: uint256):
   log WithdrawFromPool(_poolId, _amount, self.pools[_poolId].available)
 
 @external
-def forceRepayRPL(_poolId: bytes32, _node: address):
-  endTime: uint256 = self.pools[_poolId].endTime
+def forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256):
+  endTime: uint256 = self.params[_poolId].endTime
   assert endTime < block.timestamp, "term"
   if self.loans[_poolId][_node].startTime < endTime:
     self._chargeInterest(_poolId, _node, self._outstandingInterest(_poolId, _node, endTime))
     self.loans[_poolId][_node].startTime = endTime
+  if 0 < _withdrawAmount:
+    self._getRocketNodeStaking().withdrawRPL(_node, _withdrawAmount)
+    self.borrowers[_node].RPL += _withdrawAmount
   available: uint256 = self.borrowers[_node].RPL
+  if 0 < _withdrawAmount:
+    assert available <= self.loans[_poolId][_node].interest + self.loans[_poolId][_node].borrowed, "wd"
   if available <= self.loans[_poolId][_node].interest:
     available -= self._repayInterest(_poolId, _node, available)
   else:
@@ -302,7 +307,6 @@ def forceRepayRPL(_poolId: bytes32, _node: address):
   self.borrowers[_node].RPL = available
   # TODO: event
 
-# TODO: withdraw RPL for liquidation
 # TODO: claim Merkle rewards for liquidation
 # TODO: distribute ETH for liquidation
 # TODO: force repay ETH
