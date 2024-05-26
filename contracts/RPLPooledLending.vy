@@ -38,11 +38,6 @@ MAX_FEE_PERCENT: constant(uint256) = 25
 
 interface RocketMerkleDistributorInterface:
   def isClaimed(_rewardIndex: uint256, _nodeAddress: address) -> bool: view
-  def claim(_nodeAddress: address,
-            _rewardIndex: DynArray[uint256, MAX_CLAIM_INTERVALS],
-            _amountRPL: DynArray[uint256, MAX_CLAIM_INTERVALS],
-            _amountETH: DynArray[uint256, MAX_CLAIM_INTERVALS],
-            _merkleProof: DynArray[DynArray[bytes32, MAX_PROOF_LENGTH], MAX_CLAIM_INTERVALS]): nonpayable
   def claimAndStake(_nodeAddress: address,
             _rewardIndex: DynArray[uint256, MAX_CLAIM_INTERVALS],
             _amountRPL: DynArray[uint256, MAX_CLAIM_INTERVALS],
@@ -490,6 +485,7 @@ def borrow(_poolId: bytes32, _node: address, _amount: uint256):
   self._stakeRPLFor(_node, _amount)
   self._chargeInterest(_poolId, _node, self._outstandingInterest(_poolId, _node, block.timestamp))
   self.loans[_poolId][_node].startTime = block.timestamp
+  # TODO: add borrow limit check: node must have enough ETH (bonded + supplied) to cover the total borrowed RPL + interest
   self._lend(_poolId, _node, _amount)
   log Borrow(_poolId, _node, _amount,
              self.loans[_poolId][_node].borrowed,
@@ -521,4 +517,29 @@ def repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: u
             self.loans[_poolId][_node].borrowed,
             self.loans[_poolId][_node].interest)
 
-# TODO: rewards claiming and distribution actions
+@external
+def claimMerkleRewards(
+      _node: address,
+      _rewardIndex: DynArray[uint256, MAX_CLAIM_INTERVALS],
+      _amountRPL: DynArray[uint256, MAX_CLAIM_INTERVALS],
+      _amountETH: DynArray[uint256, MAX_CLAIM_INTERVALS],
+      _merkleProof: DynArray[DynArray[bytes32, MAX_PROOF_LENGTH], MAX_CLAIM_INTERVALS],
+      _stakeAmount: uint256
+    ):
+  self._checkFromBorrower(_node)
+  i: uint256 = 0
+  maxUnclaimedIndex: uint256 = 0
+  for index in _rewardIndex:
+    self.intervals[_node][index] = True
+    if index == self.borrowers[_node].index:
+      self.borrowers[_node].index = index + 1
+    self.borrowers[_node].RPL += _amountRPL[i]
+    self.borrowers[_node].ETH += _amountETH[i]
+    maxUnclaimedIndex = max(index + 1, maxUnclaimedIndex)
+    i += 1
+  self.borrowers[_node].RPL -= _stakeAmount
+  self._getMerkleDistributor().claimAndStake(_node, _rewardIndex, _amountRPL, _amountETH, _merkleProof, _stakeAmount)
+  self._updateIndex(_node, maxUnclaimedIndex)
+
+# TODO: borrower distribute fee distributor
+# TODO: borrower distribute minipool balances
