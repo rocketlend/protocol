@@ -346,32 +346,28 @@ def confirmChangeBorrowerAddress(_node: address):
   assert msg.sender == self.borrowers[_node].pending, "auth"
   self._updateBorrowerAddress(_node, msg.sender)
 
-# anyone can confirm this contract as a node's withdrawal address
-# sets the borrower's withdrawal address as the node's withdrawal address prior to this contract
-# also sets this contract as the node's RPL withdrawal address
-# reverts unless the node has set this contract as its pending withdrawal address
-# and does not already have an RPL withdrawal address set
+@internal
+def _updateIndex(_node: address, _toIndex: uint256):
+  index: uint256 = self.borrowers[_node].index
+  if _toIndex <= index: return
+  rocketMerkleDistributor: RocketMerkleDistributorInterface = self._getMerkleDistributor()
+  for _ in range(MAX_TOTAL_INTERVALS):
+    if _toIndex <= index: break
+    self.intervals[_node][index] = rocketMerkleDistributor.isClaimed(index, _node)
+    index += 1
+  self.borrowers[_node].index = index
+
 @external
 def confirmWithdrawalAddress(_node: address):
   assert not rocketStorage.getBool(
     keccak256(concat(b"node.stake.for.allowed",
                      convert(_node, bytes20),
                      convert(self, bytes20)))), "sfa"
-
   if self.borrowers[_node].address == empty(address):
     self.borrowers[_node].address = rocketStorage.getNodeWithdrawalAddress(_node)
-
   rocketStorage.confirmWithdrawalAddress(_node)
   self._getRocketNodeManager().setRPLWithdrawalAddress(_node, self, True)
-
-  rocketMerkleDistributor: RocketMerkleDistributorInterface = self._getMerkleDistributor()
-  currentIndex: uint256 = self._getRewardsPool().getRewardIndex()
-  index: uint256 = self.borrowers[_node].index
-  for _ in range(MAX_TOTAL_INTERVALS):
-    if currentIndex <= index: break
-    self.intervals[_node][index] = rocketMerkleDistributor.isClaimed(index, _node)
-    index += 1
-  self.borrowers[_node].index = index
+  self._updateIndex(_node, self._getRewardsPool().getRewardIndex())
   log JoinProtocol(_node)
 
 @internal
