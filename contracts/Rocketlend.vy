@@ -443,6 +443,13 @@ event ClaimRewards:
   totalETH: uint256
   index: uint256
 
+event Withdraw:
+  node: indexed(address)
+  amountRPL: indexed(uint256)
+  amountETH: indexed(uint256)
+  totalRPL: uint256
+  totalETH: uint256
+
 @internal
 def _checkFromBorrower(_node: address):
   assert msg.sender == self.borrowers[_node].address, "auth"
@@ -593,6 +600,10 @@ def _borrowLimit(_node: address) -> uint256:
 def _debt(_node: address) -> uint256:
   return self.borrowers[_node].borrowed + self.borrowers[_node].interest
 
+@internal
+def _checkBorrowLimit(_node: address):
+  assert self._debt(_node) <= self._borrowLimit(_node), "lim"
+
 @external
 def borrow(_poolId: bytes32, _node: address, _amount: uint256):
   assert rocketStorage.getNodeWithdrawalAddress(_node) == self, "pwa"
@@ -605,7 +616,7 @@ def borrow(_poolId: bytes32, _node: address, _amount: uint256):
   self._chargeInterest(_poolId, _node, self._outstandingInterest(_poolId, _node, block.timestamp))
   self.loans[_poolId][_node].startTime = block.timestamp
   self._lend(_poolId, _node, _amount)
-  assert self._debt(_node) <= self._borrowLimit(_node), "lim"
+  self._checkBorrowLimit(_node)
   log Borrow(_poolId, _node, _amount,
              self.loans[_poolId][_node].borrowed,
              self.loans[_poolId][_node].interest)
@@ -704,4 +715,11 @@ def refundMinipools(_node: address, _minipools: DynArray[address, MAX_NODE_MINIP
 @external
 def withdraw(_node: address, _amountRPL: uint256, _amountETH: uint256):
   self._checkFromBorrower(_node)
-  # TODO: withdraw borrower ETH and RPL from protocol (repay debt first, keep ETH for borrow limit if needed)
+  if 0 < _amountRPL:
+    self.borrowers[_node].RPL -= _amountRPL
+    assert RPL.transfer(msg.sender, _amountRPL), "t"
+  if 0 < _amountETH:
+    self.borrowers[_node].ETH -= _amountETH
+    send(msg.sender, _amountETH, gas=msg.gas)
+  self._checkBorrowLimit(_node)
+  log Withdraw(_node, _amountRPL, _amountETH, self.borrowers[_node].RPL, self.borrowers[_node].ETH)
