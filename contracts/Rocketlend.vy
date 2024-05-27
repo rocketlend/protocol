@@ -418,6 +418,16 @@ event Distribute:
   node: indexed(address)
   amount: indexed(uint256)
 
+event DistributeMinipools:
+  node: indexed(address)
+  amount: indexed(uint256)
+  total: indexed(uint256)
+
+event RefundMinipools:
+  node: indexed(address)
+  amount: indexed(uint256)
+  total: indexed(uint256)
+
 event ClaimRewards:
   node: indexed(address)
   claimedRPL: indexed(uint256)
@@ -674,8 +684,9 @@ def distributeMinipools(_node: address, _minipools: DynArray[address, MAX_NODE_M
     self.allowPaymentsFrom = minipool
     MinipoolInterface(minipool).distributeBalance(_rewardsOnly)
   self.allowPaymentsFrom = empty(address)
-  self.borrowers[_node].ETH += self.balance - balance
-  # TODO: event
+  balance = self.balance - balance
+  self.borrowers[_node].ETH += balance
+  log DistributeMinipools(_node, balance, self.borrowers[_node].ETH)
 
 @external
 def refundMinipools(_node: address, _minipools: DynArray[address, MAX_NODE_MINIPOOLS]):
@@ -685,8 +696,9 @@ def refundMinipools(_node: address, _minipools: DynArray[address, MAX_NODE_MINIP
     self.allowPaymentsFrom = minipool
     MinipoolInterface(minipool).refund()
   self.allowPaymentsFrom = empty(address)
-  self.borrowers[_node].ETH += self.balance - balance
-  # TODO: event
+  balance = self.balance - balance
+  self.borrowers[_node].ETH += balance
+  log RefundMinipools(_node, balance, self.borrowers[_node].ETH)
 
 # TODO: withdraw borrower ETH and RPL from protocol (repay debt first, keep ETH for borrow limit if needed)
 #       might want to abstract out logic from forceRepayRPL and repay for preferentially repaying debt
