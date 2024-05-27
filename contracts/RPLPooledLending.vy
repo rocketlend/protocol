@@ -366,7 +366,7 @@ def forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256):
   # TODO: event
 
 # TODO: claim Merkle rewards for liquidation
-# TODO: distribute ETH for liquidation
+# TODO: distribute/refund ETH for liquidation
 # TODO: force repay ETH
 
 @external
@@ -404,6 +404,10 @@ event Repay:
   amount: indexed(uint256)
   borrowed: uint256
   interest: uint256
+
+event Distribute:
+  node: indexed(address)
+  amount: indexed(uint256)
 
 @internal
 def _checkFromBorrower(_node: address):
@@ -619,8 +623,10 @@ def claimMerkleRewards(
     maxUnclaimedIndex = max(index + 1, maxUnclaimedIndex)
     i += 1
   self.borrowers[_node].RPL -= _stakeAmount
-  # TODO: allowPaymentsFrom
-  self._getMerkleDistributor().claimAndStake(_node, _rewardIndex, _amountRPL, _amountETH, _merkleProof, _stakeAmount)
+  distributor: RocketMerkleDistributorInterface = self._getMerkleDistributor()
+  self.allowPaymentsFrom = distributor.address
+  distributor.claimAndStake(_node, _rewardIndex, _amountRPL, _amountETH, _merkleProof, _stakeAmount)
+  self.allowPaymentsFrom = empty(address)
   self._updateIndex(_node, maxUnclaimedIndex)
   # TODO: event?
 
@@ -628,21 +634,28 @@ def claimMerkleRewards(
 def distribute(_node: address):
   self._checkFromBorrower(_node)
   distributor: RocketNodeDistributorInterface = self._getNodeDistributor(_node)
-  self.borrowers[_node].ETH += distributor.getNodeShare()
-  # TODO: allowPaymentsFrom
+  amount: uint256 = distributor.getNodeShare()
+  self.borrowers[_node].ETH += amount
+  log Distribute(_node, amount)
+  amount += self.balance
+  self.allowPaymentsFrom = distributor.address
   distributor.distribute()
-  # TODO: event?
+  self.allowPaymentsFrom = empty(address)
+  assert amount == self.balance, "bal"
 
 @external
 def distributeMinipools(_node: address, _minipools: DynArray[address, MAX_NODE_MINIPOOLS], _rewardsOnly: bool):
   if not _rewardsOnly:
     self._checkFromBorrower(_node)
   balance: uint256 = self.balance
-  # TODO: allowPaymentsFrom
   for minipool in _minipools:
+    self.allowPaymentsFrom = minipool
     MinipoolInterface(minipool).distributeBalance(_rewardsOnly)
+  self.allowPaymentsFrom = empty(address)
   self.borrowers[_node].ETH += self.balance - balance
   # TODO: event
+
+# TODO: minipool refunds
 
 # TODO: withdraw borrower ETH and RPL from protocol (repay debt first, keep ETH for borrow limit if needed)
 #       might want to abstract out logic from forceRepayRPL and repay for preferentially repaying debt
