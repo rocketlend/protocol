@@ -543,6 +543,18 @@ def _availableEther(_node: address) -> uint256:
           + self._getRocketNodeDeposit().getNodeEthBalance(_node)
           + self.borrowers[_node].ETH)
 
+@internal
+@view
+def _borrowLimit(_node: address) -> uint256:
+  return (self._availableEther(_node)
+          / self._getRocketNetworkPrices().getRPLPrice()
+          + self.borrowers[_node].RPL)
+
+@internal
+@view
+def _debt(_node: address) -> uint256:
+  return self.borrowers[_node].borrowed + self.borrowers[_node].interest
+
 @external
 def borrow(_poolId: bytes32, _node: address, _amount: uint256):
   assert rocketStorage.getNodeWithdrawalAddress(_node) == self, "pwa"
@@ -554,8 +566,8 @@ def borrow(_poolId: bytes32, _node: address, _amount: uint256):
   self._stakeRPLFor(_node, _amount)
   self._chargeInterest(_poolId, _node, self._outstandingInterest(_poolId, _node, block.timestamp))
   self.loans[_poolId][_node].startTime = block.timestamp
-  # TODO: add borrow limit check: node must have enough ETH (bonded + supplied) to cover the total borrowed (minus unclaimed) RPL + interest
   self._lend(_poolId, _node, _amount)
+  assert self._debt(_node) <= self._borrowLimit(_node), "lim"
   log Borrow(_poolId, _node, _amount,
              self.loans[_poolId][_node].borrowed,
              self.loans[_poolId][_node].interest)
