@@ -76,21 +76,40 @@ Borrowers can use the RPL protocol contract to:
 - Exit the RPL protocol by changing their node's primary and RPL withdrawal
   addresses
 
+TODO: transferring debt to another loan
+
+#### Borrow Limit
+
+The total amount borrowed at any time by a borrower is limited by the ETH and
+RPL the protocol can determine is available for repayment. This reduces the
+incentive for a node operator to lock up borrowed RPL with no intention of ever
+using it.
+
+The borrow limit is the value of the following: ETH bonded to currently active
+minipools, ETH supplied (via stake on behalf) for creating new minipools, and
+any RPL and ETH held in the RPL protocol (e.g. after being claimed or withdrawn
+from Rocket Pool). It is denominated in RPL using the current RPL price from
+Rocket Pool.
+
+Rewards are not included, so if a borrower reaches their borrow limit, they
+should claim rewards to be able to borrow more.
+
 ### Lender Actions
 
 Lenders can use the RPL protocol contract to:
 
 - Register as a lender in the protocol by claiming a new identifier
-- Transfer control (fund ownership) of their lender identifier to a new address
+- Transfer control (ownership of funds) of their lender identifier to a new
+  address
 - Create a new lending pool with their chosen parameters
 - Supply RPL to one of their lending pools - this may also be done by a third
   party on the lender's behalf
 - Withdraw RPL that is not currently borrowed from one of their lending pools
-- Withdraw any interest paid to one of their lending pools
+- Withdraw any interest paid to one of their lending pools, and optionally supply it back to the pool
 - Withdraw any remaining debt (borrowed RPL plus interest) from a node after
   the end time of the lending pool
-- Claim ETH or RPL from any borrower that has defaulted on a loan from one of
-  the lender's pools, up to the outstanding debt amount
+- Force a claim/withdrawal of ETH or RPL from any borrower that has defaulted
+  on a loan from one of the lender's pools, up to the outstanding debt amount
 
 ### Defaults
 
