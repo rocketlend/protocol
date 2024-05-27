@@ -276,6 +276,14 @@ event ForceRepayRPL:
   borrowed: uint256
   interest: uint256
 
+event ForceRepayETH:
+  id: indexed(bytes32)
+  node: indexed(address)
+  amount: indexed(uint256)
+  available: uint256
+  borrowed: uint256
+  interest: uint256
+
 @external
 def registerLender() -> uint256:
   id: uint256 = self.nextLenderId
@@ -352,13 +360,17 @@ def withdrawInterest(_poolId: bytes32, _amount: uint256, _andSupply: uint256):
   self.pools[_poolId].available += _andSupply
   log WithdrawInterest(_poolId, _amount, _andSupply, self.pools[_poolId].interest, self.pools[_poolId].available)
 
-@external
-def forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256):
+@internal
+def _ensureEnded(_poolId: bytes32, _node: address):
   endTime: uint256 = self.params[_poolId].endTime
   assert endTime < block.timestamp, "term"
   if self.loans[_poolId][_node].startTime < endTime:
     self._chargeInterest(_poolId, _node, self._outstandingInterest(_poolId, _node, endTime))
     self.loans[_poolId][_node].startTime = endTime
+
+@external
+def forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256):
+  self._ensureEnded(_poolId, _node)
   if 0 < _withdrawAmount:
     self._getRocketNodeStaking().withdrawRPL(_node, _withdrawAmount)
     self.borrowers[_node].RPL += _withdrawAmount
@@ -370,9 +382,19 @@ def forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256):
   self.borrowers[_node].RPL = available
   log ForceRepayRPL(_poolId, _node, _withdrawAmount, available, self.borrowers[_node].borrowed, self.borrowers[_node].interest)
 
+@external
+def forceRepayETH(_poolId: bytes32, _node: address):
+  self._checkFromLender(_poolId)
+  self._ensureEnded(_poolId, _node)
+  ethPerRpl: uint256 = self._getRocketNetworkPrices().getRPLPrice()
+  amount: uint256 = self.borrowers[_node].ETH / ethPerRpl
+  amount = self._payDebt(_poolId, _node, amount) * ethPerRpl
+  self.borrowers[_node].ETH -= amount
+  self.pools[_poolId].reclaimed += amount
+  log ForceRepayETH(_poolId, _node, amount, self.borrowers[_node].ETH, self.borrowers[_node].borrowed, self.borrowers[_node].interest)
+
 # TODO: claim Merkle rewards for liquidation
 # TODO: distribute/refund ETH for liquidation
-# TODO: force repay ETH
 
 @external
 def withdrawEtherFromPool(_poolId: bytes32, _amount: uint256):
