@@ -3,6 +3,7 @@
 MAX_TOTAL_INTERVALS: constant(uint256) = 2048 # 170+ years
 MAX_CLAIM_INTERVALS: constant(uint256) = 128 # ~10 years
 MAX_PROOF_LENGTH: constant(uint256) = 32 # ~ 4 billion claimers
+MAX_NODE_MINIPOOLS: constant(uint256) = 2048
 MAX_FEE_PERCENT: constant(uint256) = 25
 
 interface RPLInterface:
@@ -62,6 +63,9 @@ rocketNodeDistributorFactoryKey: constant(bytes32) = keccak256("contract.address
 interface RocketNodeDistributorInterface:
   def getNodeShare() -> uint256: view
   def distribute(): nonpayable
+
+interface MinipoolInterface:
+  def distributeBalance(_rewardsOnly: bool): nonpayable
 
 RPL: public(immutable(RPLInterface))
 rocketStorage: public(immutable(RocketStorageInterface))
@@ -589,9 +593,30 @@ def claimMerkleRewards(
     maxUnclaimedIndex = max(index + 1, maxUnclaimedIndex)
     i += 1
   self.borrowers[_node].RPL -= _stakeAmount
+  # TODO: allowPaymentsFrom
   self._getMerkleDistributor().claimAndStake(_node, _rewardIndex, _amountRPL, _amountETH, _merkleProof, _stakeAmount)
   self._updateIndex(_node, maxUnclaimedIndex)
+  # TODO: event?
 
-# TODO: borrower distribute fee distributor
-# TODO: borrower distribute minipool balances
-# TODO: withdraw borrower ETH and RPL from protocol
+@external
+def distribute(_node: address):
+  self._checkFromBorrower(_node)
+  distributor: RocketNodeDistributorInterface = self._getNodeDistributor(_node)
+  self.borrowers[_node].ETH += distributor.getNodeShare()
+  # TODO: allowPaymentsFrom
+  distributor.distribute()
+  # TODO: event?
+
+@external
+def distributeMinipools(_node: address, _minipools: DynArray[address, MAX_NODE_MINIPOOLS], _rewardsOnly: bool):
+  if not _rewardsOnly:
+    self._checkFromBorrower(_node)
+  balance: uint256 = self.balance
+  # TODO: allowPaymentsFrom
+  for minipool in _minipools:
+    MinipoolInterface(minipool).distributeBalance(_rewardsOnly)
+  self.borrowers[_node].ETH += self.balance - balance
+  # TODO: event
+
+# TODO: withdraw borrower ETH and RPL from protocol (repay debt first, keep ETH for borrow limit if needed)
+#       might want to abstract out logic from forceRepayRPL and repay for preferentially repaying debt
