@@ -66,6 +66,7 @@ interface RocketNodeDistributorInterface:
 
 interface MinipoolInterface:
   def distributeBalance(_rewardsOnly: bool): nonpayable
+  def refund(): nonpayable
 
 RPL: public(immutable(RPLInterface))
 rocketStorage: public(immutable(RocketStorageInterface))
@@ -655,7 +656,16 @@ def distributeMinipools(_node: address, _minipools: DynArray[address, MAX_NODE_M
   self.borrowers[_node].ETH += self.balance - balance
   # TODO: event
 
-# TODO: minipool refunds
+@external
+def refundMinipools(_node: address, _minipools: DynArray[address, MAX_NODE_MINIPOOLS]):
+  self._checkFromBorrower(_node)
+  balance: uint256 = self.balance
+  for minipool in _minipools:
+    self.allowPaymentsFrom = minipool
+    MinipoolInterface(minipool).refund()
+  self.allowPaymentsFrom = empty(address)
+  self.borrowers[_node].ETH += self.balance - balance
+  # TODO: event
 
 # TODO: withdraw borrower ETH and RPL from protocol (repay debt first, keep ETH for borrow limit if needed)
 #       might want to abstract out logic from forceRepayRPL and repay for preferentially repaying debt
