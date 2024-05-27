@@ -172,8 +172,8 @@ intervals: public(HashMap[address, HashMap[uint256, bool]]) # intervals known to
 oneRPL: immutable(uint256)
 
 @external
-def __init__():
-  rocketStorage = RocketStorageInterface(0x1d8f8f00cfa6758d7bE78336684788Fb0ee0Fa46)
+def __init__(_rocketStorage: address):
+  rocketStorage = RocketStorageInterface(_rocketStorage)
   RPL = RPLInterface(rocketStorage.getAddress(keccak256("contract.addressrocketTokenRPL")))
   self.protocol.address = msg.sender
   oneRPL = 10 ** convert(RPL.decimals(), uint256)
@@ -267,6 +267,14 @@ event WithdrawEtherFromPool:
   id: indexed(bytes32)
   amount: indexed(uint256)
   total: indexed(uint256)
+
+event ForceRepayRPL:
+  id: indexed(bytes32)
+  node: indexed(address)
+  withdrawn: indexed(uint256)
+  available: uint256
+  borrowed: uint256
+  interest: uint256
 
 @external
 def registerLender() -> uint256:
@@ -364,7 +372,7 @@ def forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256):
     available -= self._repay(_poolId, _node, min(available, self.loans[_poolId][_node].borrowed))
   assert available < self.borrowers[_node].RPL, "none"
   self.borrowers[_node].RPL = available
-  # TODO: event
+  log ForceRepayRPL(_poolId, _node, _withdrawAmount, available, self.borrowers[_node].borrowed, self.borrowers[_node].interest)
 
 # TODO: claim Merkle rewards for liquidation
 # TODO: distribute/refund ETH for liquidation
@@ -409,6 +417,15 @@ event Repay:
 event Distribute:
   node: indexed(address)
   amount: indexed(uint256)
+
+event ClaimRewards:
+  node: indexed(address)
+  claimedRPL: indexed(uint256)
+  claimedETH: indexed(uint256)
+  stakedRPL: uint256
+  totalRPL: uint256
+  totalETH: uint256
+  index: uint256
 
 @internal
 def _checkFromBorrower(_node: address):
@@ -615,6 +632,8 @@ def claimMerkleRewards(
   self._checkFromBorrower(_node)
   i: uint256 = 0
   maxUnclaimedIndex: uint256 = 0
+  totalRPL: uint256 = self.borrowers[_node].RPL
+  totalETH: uint256 = self.borrowers[_node].ETH
   for index in _rewardIndex:
     self.intervals[_node][index] = True
     if index == self.borrowers[_node].index:
@@ -623,13 +642,15 @@ def claimMerkleRewards(
     self.borrowers[_node].ETH += _amountETH[i]
     maxUnclaimedIndex = max(index + 1, maxUnclaimedIndex)
     i += 1
+  totalRPL = self.borrowers[_node].RPL - totalRPL
+  totalETH = self.borrowers[_node].ETH - totalETH
   self.borrowers[_node].RPL -= _stakeAmount
   distributor: RocketMerkleDistributorInterface = self._getMerkleDistributor()
   self.allowPaymentsFrom = distributor.address
   distributor.claimAndStake(_node, _rewardIndex, _amountRPL, _amountETH, _merkleProof, _stakeAmount)
   self.allowPaymentsFrom = empty(address)
   self._updateIndex(_node, maxUnclaimedIndex)
-  # TODO: event?
+  log ClaimRewards(_node, totalRPL, totalETH, _stakeAmount, self.borrowers[_node].RPL, self.borrowers[_node].ETH, self.borrowers[_node].index)
 
 @external
 def distribute(_node: address):
