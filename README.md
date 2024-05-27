@@ -1,28 +1,27 @@
-# RPL
+# Rocketlend
 
-RPL Pooled Lending ("RPL", or "RPL protocol" when ambiguous) is a protocol for
-lending/borrowing RPL to stake on Rocket Pool nodes.
+Rocketlend is a protocol for lending/borrowing RPL to stake on Rocket Pool
+nodes.
 
 No collateral asset is required to borrow RPL from lenders because the borrowed
 RPL is immediately staked on a node, and the withdrawal address for the node is
-verified to be the RPL protocol smart contract that will enforce the terms of
+verified to be the Rocketlend smart contract that will enforce the terms of
 the loan. Another way to think of it is that the collateral for the loan is the
 node's staked assets (ETH and RPL).
 
 ## Technical Design
 
-The RPL protocol consists of a single smart contract ("the (RPL (protocol))
-contract"), used for all interaction with the protocol and designed to be the
-primary and RPL withdrawal address for Rocket Pool nodes that borrow RPL from
-the protocol.
+Rocketlend consists of a single smart contract ("the (Rocketlend) contract"),
+used for all interaction with the protocol and designed to be the primary and
+RPL withdrawal address for Rocket Pool nodes that borrow RPL from the protocol.
 
 The protocol participants come in two types: "lenders", who supply RPL to the
 protocol, and "borrowers" who borrow RPL from the protocol to stake on Rocket
 Pool nodes.
 
-A lender is assigned a unique identifier when they register with the RPL
-protocol. They provide a withdrawal address (to which funds from the protocol
-will be sent), which can be changed.
+A lender is assigned a unique identifier when they register with Rocketlend.
+They provide a withdrawal address (to which funds from the protocol will be
+sent), which can be changed.
 
 A borrower is identified by the Rocket Pool node they are borrowing for. They
 also have a withdrawal address, which can be changed, to which their funds are
@@ -60,10 +59,10 @@ RPL that is not currently borrowed may be withdrawn from the pool at any time.
 
 ### Borrower Actions
 
-Borrowers can use the RPL protocol contract to:
+Borrowers can use the Rocketlend contract to:
 
 - Register as a borrower in the protocol by confirming their node's primary and
-  RPL withdrawal addresses as the RPL protocol contract
+  RPL withdrawal addresses as the Rocketlend contract
 - Stake RPL from a pool onto their node
 - Repay a pool by withdrawing RPL from their node
 - Repay a pool by supplying fresh RPL - this may also be done by a third party
@@ -72,9 +71,8 @@ Borrowers can use the RPL protocol contract to:
   withdrawal address
 - Withdraw ETH rewards from their node to their withdrawal address
 - Withdraw unstaked ETH from their node to their withdrawal address
-- Change their (RPL protocol) withdrawal address
-- Exit the RPL protocol by changing their node's primary and RPL withdrawal
-  addresses
+- Change their (Rocketlend) withdrawal address
+- Exit Rocketlend by changing their node's primary and RPL withdrawal addresses
 
 TODO: transferring debt to another loan
 
@@ -87,16 +85,16 @@ using it.
 
 The borrow limit is the value of the following: ETH bonded to currently active
 minipools, ETH supplied (via stake on behalf) for creating new minipools, and
-any RPL and ETH held in the RPL protocol (e.g. after being claimed or withdrawn
-from Rocket Pool). It is denominated in RPL using the current RPL price from
-Rocket Pool.
+any RPL and ETH held in Rocketlend (e.g. after being claimed or withdrawn from
+Rocket Pool). It is denominated in RPL using the current RPL price from Rocket
+Pool.
 
 Rewards are not included, so if a borrower reaches their borrow limit, they
 should claim rewards to be able to borrow more.
 
 ### Lender Actions
 
-Lenders can use the RPL protocol contract to:
+Lenders can use the Rocketlend contract to:
 
 - Register as a lender in the protocol by claiming a new identifier
 - Transfer control (ownership of funds) of their lender identifier to a new
@@ -125,5 +123,5 @@ TODO: document all contract functions in detail
 TODO: discuss incentives for various scenarios
 TODO: discuss possibilities for funds getting locked
 TODO: discuss affects of RPL price volatility for defaults
-TODO: discuss upgrades (of Rocket Pool, beacon chain, RPL protocol, etc.)
+TODO: discuss upgrades (of Rocket Pool, beacon chain, Rocketlend, etc.)
 TODO: smart contract risk, risks and benefits of the technical design, audits
