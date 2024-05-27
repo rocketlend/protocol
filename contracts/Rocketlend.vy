@@ -365,11 +365,7 @@ def forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256):
   available: uint256 = self.borrowers[_node].RPL
   if 0 < _withdrawAmount:
     assert available <= self.loans[_poolId][_node].interest + self.loans[_poolId][_node].borrowed, "wd"
-  if available <= self.loans[_poolId][_node].interest:
-    available -= self._repayInterest(_poolId, _node, available)
-  else:
-    available -= self._repayInterest(_poolId, _node, self.loans[_poolId][_node].interest)
-    available -= self._repay(_poolId, _node, min(available, self.loans[_poolId][_node].borrowed))
+  available = self._payDebt(_poolId, _node, available)
   assert available < self.borrowers[_node].RPL, "none"
   self.borrowers[_node].RPL = available
   log ForceRepayRPL(_poolId, _node, _withdrawAmount, available, self.borrowers[_node].borrowed, self.borrowers[_node].interest)
@@ -384,6 +380,16 @@ def withdrawEtherFromPool(_poolId: bytes32, _amount: uint256):
   self.pools[_poolId].reclaimed -= _amount
   send(msg.sender, _amount, gas=msg.gas)
   log WithdrawEtherFromPool(_poolId, _amount, self.pools[_poolId].reclaimed)
+
+@internal
+def _payDebt(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
+  amount: uint256 = _amount
+  if amount <= self.loans[_poolId][_node].interest:
+    amount -= self._repayInterest(_poolId, _node, amount)
+  else:
+    amount -= self._repayInterest(_poolId, _node, self.loans[_poolId][_node].interest)
+    amount -= self._repay(_poolId, _node, min(amount, self.loans[_poolId][_node].borrowed))
+  return amount
 
 # Borrower actions
 
@@ -620,12 +626,7 @@ def repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: u
   if 0 < _amountSupplied:
     assert RPL.transferFrom(msg.sender, self, _amountSupplied), "tf"
     available += _amountSupplied
-  if available <= self.loans[_poolId][_node].interest:
-    available -= self._repayInterest(_poolId, _node, available)
-  else:
-    available -= self._repayInterest(_poolId, _node, self.loans[_poolId][_node].interest)
-    available -= self._repay(_poolId, _node, available)
-  assert available == 0, "bal"
+  assert self._payDebt(_poolId, _node, available) == 0, "bal"
   log Repay(_poolId, _node, _amount + _amountSupplied,
             self.loans[_poolId][_node].borrowed,
             self.loans[_poolId][_node].interest)
@@ -700,5 +701,7 @@ def refundMinipools(_node: address, _minipools: DynArray[address, MAX_NODE_MINIP
   self.borrowers[_node].ETH += balance
   log RefundMinipools(_node, balance, self.borrowers[_node].ETH)
 
-# TODO: withdraw borrower ETH and RPL from protocol (repay debt first, keep ETH for borrow limit if needed)
-#       might want to abstract out logic from forceRepayRPL and repay for preferentially repaying debt
+@external
+def withdraw(_node: address, _amountRPL: uint256, _amountETH: uint256):
+  self._checkFromBorrower(_node)
+  # TODO: withdraw borrower ETH and RPL from protocol (repay debt first, keep ETH for borrow limit if needed)
