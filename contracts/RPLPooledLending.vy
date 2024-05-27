@@ -144,7 +144,7 @@ params: public(HashMap[bytes32, PoolParams])
 struct PoolState:
   available: uint256 # RPL available to be returned to the lender
   borrowed: uint256 # total RPL currently borrowed by borrowers
-  interest: uint256 # total accrued interest, not including on borrowed
+  interest: uint256 # interest paid to the pool (not yet claimed by lender)
   reclaimed: uint256 # ETH accrued (not yet returned to lender) in service of defaults
 
 pools: public(HashMap[bytes32, PoolState])
@@ -255,6 +255,13 @@ event WithdrawFromPool:
   amount: indexed(uint256)
   total: indexed(uint256)
 
+event WithdrawInterest:
+  id: indexed(bytes32)
+  amount: indexed(uint256)
+  supplied: indexed(uint256)
+  interest: uint256
+  available: uint256
+
 event WithdrawEtherFromPool:
   id: indexed(bytes32)
   amount: indexed(uint256)
@@ -327,6 +334,14 @@ def withdrawFromPool(_poolId: bytes32, _amount: uint256):
   self.pools[_poolId].available -= _amount
   assert RPL.transfer(msg.sender, _amount), "t"
   log WithdrawFromPool(_poolId, _amount, self.pools[_poolId].available)
+
+@external
+def withdrawInterest(_poolId: bytes32, _amount: uint256, _andSupply: uint256):
+  self._checkFromLender(_poolId)
+  self.pools[_poolId].interest -= _amount
+  assert RPL.transfer(msg.sender, _amount - _andSupply), "t"
+  self.pools[_poolId].available += _andSupply
+  log WithdrawInterest(_poolId, _amount, _andSupply, self.pools[_poolId].interest, self.pools[_poolId].available)
 
 @external
 def forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256):
@@ -494,14 +509,13 @@ def _chargeInterest(_poolId: bytes32, _node: address, _amount: uint256):
   if 0 < _amount:
     self.loans[_poolId][_node].interest += _amount
     self.borrowers[_node].interest += _amount
-    self.pools[_poolId].interest += _amount
 
 @internal
 def _repayInterest(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
   if 0 < _amount:
     self.loans[_poolId][_node].interest -= _amount
     self.borrowers[_node].interest -= _amount
-    self.pools[_poolId].interest -= _amount
+    self.pools[_poolId].interest += _amount
   return _amount
 
 @internal
