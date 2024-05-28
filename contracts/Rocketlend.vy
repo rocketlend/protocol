@@ -297,6 +297,15 @@ event ForceClaimRewards:
   borrowed: uint256
   interest: uint256
 
+event ForceDistributeRefund:
+  id: indexed(bytes32)
+  node: indexed(address)
+  claimed: uint256
+  repaid: uint256
+  available: uint256
+  borrowed: uint256
+  interest: uint256
+
 @external
 def registerLender() -> uint256:
   id: uint256 = self.nextLenderId
@@ -401,8 +410,9 @@ def forceRepayETH(_poolId: bytes32, _node: address):
   self._checkFromLender(_poolId)
   self._checkEndedOwing(_poolId, _node)
   ethPerRpl: uint256 = self._getRocketNetworkPrices().getRPLPrice()
-  amount: uint256 = self.borrowers[_node].ETH / ethPerRpl
-  amount = self._payDebt(_poolId, _node, amount) * ethPerRpl
+  startAmount: uint256 = self.borrowers[_node].ETH
+  amount: uint256 = startAmount - self._payDebt(_poolId, _node, startAmount / ethPerRpl) * ethPerRpl
+  assert 0 < amount, "none"
   self.borrowers[_node].ETH -= amount
   self.pools[_poolId].reclaimed += amount
   log ForceRepayETH(_poolId, _node, amount, self.borrowers[_node].ETH, self.borrowers[_node].borrowed, self.borrowers[_node].interest)
@@ -454,7 +464,28 @@ def forceClaimMerkleRewards(
                         self.borrowers[_node].RPL, self.borrowers[_node].ETH,
                         self.borrowers[_node].borrowed, self.borrowers[_node].interest)
 
-# TODO: distribute/distributeMinipools/refund ETH for liquidation
+@external
+def forceDistributeRefund(_poolId: bytes32, _node: address,
+                          _distribute: bool,
+                          _distributeMinipools: DynArray[address, MAX_NODE_MINIPOOLS],
+                          _rewardsOnly: bool,
+                          _refundMinipools: DynArray[address, MAX_NODE_MINIPOOLS]):
+  self._checkFromLender(_poolId)
+  self._checkEndedOwing(_poolId, _node)
+  total: uint256 = 0
+  if _distribute:
+    total += self._distribute(_node)
+  total += self._distributeMinipools(_distributeMinipools, _rewardsOnly)
+  total += self._refundMinipools(_refundMinipools)
+  assert 0 < total, "none"
+  ethPerRpl: uint256 = self._getRocketNetworkPrices().getRPLPrice()
+  startAmount: uint256 = self.borrowers[_node].ETH
+  amount: uint256 = startAmount - self._payDebt(_poolId, _node, startAmount / ethPerRpl) * ethPerRpl
+  assert 0 < amount, "none"
+  self.borrowers[_node].ETH -= amount
+  self.pools[_poolId].reclaimed += amount
+  log ForceDistributeRefund(_poolId, _node, total, amount, self.borrowers[_node].ETH,
+                            self.borrowers[_node].borrowed, self.borrowers[_node].interest)
 
 # Borrower actions
 
@@ -754,18 +785,22 @@ def claimMerkleRewards(
   totalRPL, totalETH = self._claimMerkleRewards(_node, _rewardIndex, _amountRPL, _amountETH, _merkleProof, _stakeAmount)
   log ClaimRewards(_node, totalRPL, totalETH, _stakeAmount, self.borrowers[_node].RPL, self.borrowers[_node].ETH, self.borrowers[_node].index)
 
-@external
-def distribute(_node: address):
-  self._checkFromBorrower(_node)
+@internal
+def _distribute(_node: address) -> uint256:
   distributor: RocketNodeDistributorInterface = self._getNodeDistributor(_node)
-  amount: uint256 = distributor.getNodeShare()
-  self.borrowers[_node].ETH += amount
-  log Distribute(_node, amount)
-  amount += self.balance
+  nodeShare: uint256 = distributor.getNodeShare()
+  self.borrowers[_node].ETH += nodeShare
+  amount: uint256 = self.balance
   self.allowPaymentsFrom = distributor.address
   distributor.distribute()
   self.allowPaymentsFrom = empty(address)
-  assert amount == self.balance, "bal"
+  assert amount + nodeShare == self.balance, "bal"
+  return nodeShare
+
+@external
+def distribute(_node: address):
+  self._checkFromBorrower(_node)
+  log Distribute(_node, self._distribute(_node))
 
 @internal
 def _distributeMinipools(_minipools: DynArray[address, MAX_NODE_MINIPOOLS], _rewardsOnly: bool) -> uint256:
