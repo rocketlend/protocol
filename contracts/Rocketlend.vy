@@ -739,6 +739,19 @@ def repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: u
             self.loans[_poolId][_node].borrowed,
             self.loans[_poolId][_node].interest)
 
+@external
+def transfer(_node: address, _fromPool: bytes32, _toPool: bytes32, _amount: uint256):
+  self._checkFromBorrower(_node)
+  assert block.timestamp < self.params[_toPool].endTime, "end"
+  self._lend(_toPool, _node, _amount)
+  endTime: uint256 = self._effectiveEndTime(_fromPool)
+  self._chargeInterest(_fromPool, _node, self._outstandingInterest(_fromPool, _node, endTime))
+  self.loans[_fromPool][_node].startTime = endTime
+  self._payDebt(_fromPool, _node, _amount)
+  # TODO: event
+
+# TODO: transfer without supply in the toPool
+
 @internal
 def _claimMerkleRewards(
       _node: address,
