@@ -118,7 +118,240 @@ TODO: how RPL slashing might affect a default
 
 ## Contract API
 
-TODO: document all contract functions in detail
+### Constants
+
+The first two constants below concern the protocol fee. The last four are
+explicit limits on dynamically sized types (as required by Vyper), chosen to be
+large enough to be practically unlimited.
+
+| Name                | Value   | Note                 |
+|---------------------|---------|----------------------|
+|`FEE_DENOMINATOR`    | 1000000 | 6 decimal places     |
+|`MAX_FEE_NUMERATOR`  | 100000  | 10%                  |
+|`MAX_TOTAL_INTERVALS`| 2048    | 170+ years           |
+|`MAX_CLAIM_INTERVALS`| 128     | ~ 10 years           |
+|`MAX_PROOF_LENGTH`   | 32      | ~ 4 billion claimers |
+|`MAX_NODE_MINIPOOLS` | 2048    |                      |
+
+### Structs
+
+- `ProtocolState`
+  - `fees`: unclaimed RPL owed to the protocol
+  - `feeNumerator`: current protocol fee for new pools
+  - `address`: admin (that can claim protocol fees and change the rate)
+  - `pending`: pending address used when changing the admin address
+
+- `PoolParams` (per pool id)
+  - `lender`: identifier (non-negative integer) of the pool owner
+  - `interestRate`: attoRPL (i.e. RPL wei) per RPL borrowed per second (before the loan end time)
+  - `endTime`: seconds after the Unix epoch when the loan ends
+  - `protocolFee`: protocol fee numerator as locked in at pool creation
+
+- `PoolState` (per pool id)
+  - `available`: amount of RPL available to be borrowed or returned to the lender
+  - `borrowed`: amount of RPL currently borrowed
+  - `allowance`: limit on how much RPL can be made available by transferring either borrowed RPL from another of the lender's pools, or interest from another of the lender's loans
+  - `interest`: interest the pool has accrued (available to be claimed by the lender)
+  - `reclaimed`: amount of ETH accrued in service of defaults (available to be claimed by the lender)
+
+- `LoanState` (per pool id and node (borrower))
+  - `borrowed`: amount of RPL currently borrowed in this loan
+  - `startTime`: start time for ongoing interest accumulation on the `borrowed` amount
+  - `interest`: interest due (accrued before `startTime`) but not yet paid by the borrower
+
+- `BorrowerState` (per node)
+  - `borrowed`: total RPL borrowed
+  - `interest`: interest due, not including ongoing interest on `borrowed`, but not yet paid
+  - `RPL`: amount of RPL available for (with priority) debt repayments or to be withdrawn
+  - `ETH`: amount of ETH available for (with priority) debt repayments on liquidation or to be withdrawn
+  - `index`: first not-yet-accounted-for Rocket Pool rewards interval index
+  - `address`: current (Rocketlend) withdrawal address for the borrower
+  - `pending`: pending address used when changing the borrower address
+
+### Views
+
+- `protocol() → ProtocolState`: the current protocol state
+- `nextLenderId() → uint256`: the first unassigned lender identifier
+- `params(id: bytes32) → PoolParams`
+- `pools(id: bytes32) → PoolState`
+- `loans(id: bytes32, node: address) → LoanState`
+- `borrowers(node: address) → BorrowerState`
+- `intervals(node: address, index: uint256) → bool`: whether a rewards interval index is known to be claimed
+- `lenderAddress(lender: uint256) → address`
+- `pendingLenderAddress(lender: uint256) → address`
+- `rocketStorage() → address`: the address of the Rocket Storage contract
+- `RPL() → address`: the address of the RPL token contract
+
+### Lender functions
+- `registerLender() → uint256`
+- `changeLenderAddress(_lender: uint256, _newAddress: address, _confirm: bool)`
+- `confirmChangeLenderAddress(_lender: uint256)`
+- `createPool(_params: PoolParams) → bytes32`
+- `supplyPool(_poolId: bytes32, _amount: uint256)`
+- `supplyPoolOnBehalf(_poolId: bytes32, _amount: uint256)`
+- `setAllowance(_poolId: bytes32, _amount: uint256)`
+- `withdrawFromPool(_poolId: bytes32, _amount: uint256)`
+- `withdrawInterest(_poolId: bytes32, _amount: uint256, _andSupply: uint256)`
+- `forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256)`
+- `forceRepayETH(_poolId: bytes32, _node: address)`
+- `withdrawEtherFromPool(_poolId: bytes32, _amount: uint256)`
+- `forceClaimMerkleRewards(_poolId: bytes32, _node: address, _repayRPL: uint256, _repayETH: uint256, _rewardIndex: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountRPL: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountETH: DynArray[uint256, MAX_CLAIM_INTERVALS], _merkleProof: DynArray[DynArray[bytes32, MAX_PROOF_LENGTH], MAX_CLAIM_INTERVALS])`
+- `forceDistributeRefund(_poolId: bytes32, _node: address, _distribute: bool, _distributeMinipools: DynArray[address, MAX_NODE_MINIPOOLS], _rewardsOnly: bool, _refundMinipools: DynArray[address, MAX_NODE_MINIPOOLS])`
+
+### Borrower functions
+- `changeBorrowerAddress(_node: address, _newAddress: address, _confirm: bool)`
+- `confirmChangeBorrowerAddress(_node: address)`
+- `confirmWithdrawalAddress(_node: address)`
+- `changeWithdrawalAddress(_node: address, _newAddress: address, _confirm: bool)`
+- `changeRPLWithdrawalAddress(_node: address, _newAddress: address, _confirm: bool)`
+- `unsetRPLWithdrawalAddress(_node: address)`
+- `stakeRPLFor(_node: address, _amount: uint256)`
+- `withdrawRPL(_node: address, _amount: uint256)`
+- `borrow(_poolId: bytes32, _node: address, _amount: uint256)`
+- `repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: uint256)`
+- `transferDebt(_node: address, _fromPool: bytes32, _toPool: bytes32, _fromAvailable: uint256, _fromInterest: uint256, _fromAllowance: uint256)`
+- `claimMerkleRewards(_node: address, _rewardIndex: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountRPL: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountETH: DynArray[uint256, MAX_CLAIM_INTERVALS], _merkleProof: DynArray[DynArray[bytes32, MAX_PROOF_LENGTH], MAX_CLAIM_INTERVALS], _stakeAmount: uint256)`
+- `distribute(_node: address)`
+- `distributeMinipools(_node: address, _minipools: DynArray[address, MAX_NODE_MINIPOOLS], _rewardsOnly: bool)`
+- `refundMinipools(_node: address, _minipools: DynArray[address, MAX_NODE_MINIPOOLS])`
+- `withdraw(_node: address, _amountRPL: uint256, _amountETH: uint256)`
+
+### Admin functions
+- `changeAdminAddress(_newAddress: address, _confirm: bool)`
+- `confirmChangeAdminAddress()`
+- `updateFeeNumerator(_new: uint256)`
+- `withdrawFees()`
+
+### Events
+
+- `UpdateAdmin`
+    - `old: address`
+    - `new: address`
+- `UpdateFeeNumerator`
+    - `old: uint256`
+    - `new: uint256`
+- `WithdrawFees`
+    - `recipient: address`
+    - `amount: uint256`
+- `RegisterLender`
+    - `id: uint256`
+    - `address: address`
+- `UpdateLender`
+    - `id: uint256`
+    - `old: address`
+    - `new: address`
+- `CreatePool`
+    - `id: bytes32`
+    - `params: PoolParams`
+- `SupplyPool`
+    - `id: bytes32`
+    - `amount: uint256`
+    - `total: uint256`
+- `SetAllowance`
+    - `id: bytes32`
+    - `old: uint256`
+    - `new: uint256`
+- `WithdrawFromPool`
+    - `id: bytes32`
+    - `amount: uint256`
+    - `total: uint256`
+- `WithdrawInterest`
+    - `id: bytes32`
+    - `amount: uint256`
+    - `supplied: uint256`
+    - `interest: uint256`
+    - `available: uint256`
+- `WithdrawEtherFromPool`
+    - `id: bytes32`
+    - `amount: uint256`
+    - `total: uint256`
+- `ForceRepayRPL`
+    - `id: bytes32`
+    - `node: address`
+    - `withdrawn: uint256`
+    - `available: uint256`
+    - `borrowed: uint256`
+    - `interest: uint256`
+- `ForceRepayETH`
+    - `id: bytes32`
+    - `node: address`
+    - `amount: uint256`
+    - `available: uint256`
+    - `borrowed: uint256`
+    - `interest: uint256`
+- `ForceClaimRewards`
+    - `id: bytes32`
+    - `node: address`
+    - `claimedRPL: uint256`
+    - `claimedETH: uint256`
+    - `repaidRPL: uint256`
+    - `repaidETH: uint256`
+    - `RPL: uint256`
+    - `ETH: uint256`
+    - `borrowed: uint256`
+    - `interest: uint256`
+- `ForceDistributeRefund`
+    - `id: bytes32`
+    - `node: address`
+    - `claimed: uint256`
+    - `repaid: uint256`
+    - `available: uint256`
+    - `borrowed: uint256`
+    - `interest: uint256`
+- `UpdateBorrower`
+    - `node: address`
+    - `old: address`
+    - `new: address`
+- `JoinProtocol`
+    - `node: address`
+- `WithdrawRPL`
+    - `node: address`
+    - `amount: uint256`
+    - `total: uint256`
+- `Borrow`
+    - `pool: bytes32`
+    - `node: address`
+    - `amount: uint256`
+    - `borrowed: uint256`
+    - `interest: uint256`
+- `Repay`
+    - `pool: bytes32`
+    - `node: address`
+    - `amount: uint256`
+    - `borrowed: uint256`
+    - `interest: uint256`
+- `TransferDebt`
+    - `node: address`
+    - `fromPool: bytes32`
+    - `toPool: bytes32`
+    - `amount: uint256`
+    - `interest: uint256`
+    - `allowance: uint256`
+- `Distribute`
+    - `node: address`
+    - `amount: uint256`
+- `DistributeMinipools`
+    - `node: address`
+    - `amount: uint256`
+    - `total: uint256`
+- `RefundMinipools`
+    - `node: address`
+    - `amount: uint256`
+    - `total: uint256`
+- `ClaimRewards`
+    - `node: address`
+    - `claimedRPL: uint256`
+    - `claimedETH: uint256`
+    - `stakedRPL: uint256`
+    - `totalRPL: uint256`
+    - `totalETH: uint256`
+    - `index: uint256`
+- `Withdraw`
+    - `node: address`
+    - `amountRPL: uint256`
+    - `amountETH: uint256`
+    - `totalRPL: uint256`
+    - `totalETH: uint256`
 
 ## Security Considerations
 
