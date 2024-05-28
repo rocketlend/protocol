@@ -125,7 +125,7 @@ def _getNodeDistributor(_node: address) -> RocketNodeDistributorInterface:
 
 struct ProtocolState:
   fees: uint256 # RPL owed to the protocol (not yet claimed)
-  feeNumerator: uint256 # current protocol fee rate
+  feeNumerator: uint256 # current protocol fee rate for new pools
   address: address
   pending: address
 
@@ -140,6 +140,7 @@ struct PoolParams:
   lender: uint256
   interestRate: uint256 # attoRPL per RPL borrowed per second (before loan end time)
   endTime: uint256 # seconds after Unix epoch
+  protocolFee: uint256 # numerator for protocol fee
 
 params: public(HashMap[bytes32, PoolParams])
 
@@ -344,12 +345,14 @@ def _poolId(_params: PoolParams) -> bytes32:
   return keccak256(concat(
                      convert(_params.lender, bytes32),
                      convert(_params.interestRate, bytes32),
-                     convert(_params.endTime, bytes32)
+                     convert(_params.endTime, bytes32),
+                     convert(_params.protocolFee, bytes32)
                   ))
 
 @external
 def createPool(_params: PoolParams) -> bytes32:
   assert msg.sender == self.lenderAddress[_params.lender], "auth"
+  assert _params.protocolFee == self.protocol.feeNumerator, "fee"
   poolId: bytes32 = self._poolId(_params)
   log CreatePool(poolId, _params)
   return poolId
@@ -694,7 +697,7 @@ def _repay(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
     self.loans[_poolId][_node].borrowed -= _amount
     self.borrowers[_node].borrowed -= _amount
     self.pools[_poolId].borrowed -= _amount
-    fee: uint256 = self.protocol.feeNumerator * _amount / FEE_DENOMINATOR
+    fee: uint256 = self.params[_poolId].protocolFee * _amount / FEE_DENOMINATOR
     self.protocol.fees += fee
     self.pools[_poolId].available += _amount - fee
   return _amount
