@@ -4,7 +4,8 @@ MAX_TOTAL_INTERVALS: constant(uint256) = 2048 # 170+ years
 MAX_CLAIM_INTERVALS: constant(uint256) = 128 # ~10 years
 MAX_PROOF_LENGTH: constant(uint256) = 32 # ~ 4 billion claimers
 MAX_NODE_MINIPOOLS: constant(uint256) = 2048
-MAX_FEE_PERCENT: constant(uint256) = 25
+MAX_FEE_NUMERATOR: constant(uint256) = 250000
+FEE_DENOMINATOR: constant(uint256) = 1000000
 
 interface RPLInterface:
   def decimals() -> uint8: view
@@ -124,7 +125,7 @@ def _getNodeDistributor(_node: address) -> RocketNodeDistributorInterface:
 
 struct ProtocolState:
   fees: uint256 # RPL owed to the protocol (not yet claimed)
-  feePercent: uint256 # current protocol fee rate
+  feeNumerator: uint256 # current protocol fee rate
   address: address
   pending: address
 
@@ -190,7 +191,7 @@ event UpdateAdmin:
   old: indexed(address)
   new: indexed(address)
 
-event UpdateFeePercent:
+event UpdateFeeNumerator:
   old: indexed(uint256)
   new: indexed(uint256)
 
@@ -218,11 +219,11 @@ def confirmChangeAdminAddress():
   self._updateAdminAddress(msg.sender)
 
 @external
-def updateFeePercent(_newPercent: uint256):
+def updateFeeNumerator(_new: uint256):
   assert msg.sender == self.protocol.address, "auth"
-  assert _newPercent <= MAX_FEE_PERCENT, "max"
-  log UpdateFeePercent(self.protocol.feePercent, _newPercent)
-  self.protocol.feePercent = _newPercent
+  assert _new <= MAX_FEE_NUMERATOR, "max"
+  log UpdateFeeNumerator(self.protocol.feeNumerator, _new)
+  self.protocol.feeNumerator = _new
 
 @external
 def withdrawFees():
@@ -392,9 +393,6 @@ def forceRepayETH(_poolId: bytes32, _node: address):
   self.borrowers[_node].ETH -= amount
   self.pools[_poolId].reclaimed += amount
   log ForceRepayETH(_poolId, _node, amount, self.borrowers[_node].ETH, self.borrowers[_node].borrowed, self.borrowers[_node].interest)
-
-# TODO: claim Merkle rewards for liquidation
-# TODO: distribute/refund ETH for liquidation
 
 @external
 def withdrawEtherFromPool(_poolId: bytes32, _amount: uint256):
@@ -598,9 +596,10 @@ def _repay(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
   if 0 < _amount:
     self.loans[_poolId][_node].borrowed -= _amount
     self.borrowers[_node].borrowed -= _amount
-    self.pools[_poolId].available += _amount
     self.pools[_poolId].borrowed -= _amount
-    # TODO: charge protocol fee here
+    fee: uint256 = self.protocol.feeNumerator * _amount / FEE_DENOMINATOR
+    self.protocol.fees += fee
+    self.pools[_poolId].available += _amount - fee
   return _amount
 
 @internal
@@ -663,6 +662,9 @@ def repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: u
   log Repay(_poolId, _node, _amount + _amountSupplied,
             self.loans[_poolId][_node].borrowed,
             self.loans[_poolId][_node].interest)
+
+# TODO: claim Merkle rewards for liquidation
+# TODO: distribute/refund ETH for liquidation
 
 @external
 def claimMerkleRewards(
