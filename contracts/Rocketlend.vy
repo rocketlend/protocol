@@ -374,16 +374,17 @@ def withdrawInterest(_poolId: bytes32, _amount: uint256, _andSupply: uint256):
   log WithdrawInterest(_poolId, _amount, _andSupply, self.pools[_poolId].interest, self.pools[_poolId].available)
 
 @internal
-def _checkEnded(_poolId: bytes32, _node: address):
+def _checkEndedOwing(_poolId: bytes32, _node: address):
   endTime: uint256 = self.params[_poolId].endTime
   assert endTime < block.timestamp, "term"
   if self.loans[_poolId][_node].startTime < endTime:
     self._chargeInterest(_poolId, _node, self._outstandingInterest(_poolId, _node, endTime))
     self.loans[_poolId][_node].startTime = endTime
+  assert 0 < self.loans[_poolId][_node].borrowed or 0 < self.loans[_poolId][_node].interest, "paid"
 
 @external
 def forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256):
-  self._checkEnded(_poolId, _node)
+  self._checkEndedOwing(_poolId, _node)
   if 0 < _withdrawAmount:
     self._getRocketNodeStaking().withdrawRPL(_node, _withdrawAmount)
     self.borrowers[_node].RPL += _withdrawAmount
@@ -398,7 +399,7 @@ def forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256):
 @external
 def forceRepayETH(_poolId: bytes32, _node: address):
   self._checkFromLender(_poolId)
-  self._checkEnded(_poolId, _node)
+  self._checkEndedOwing(_poolId, _node)
   ethPerRpl: uint256 = self._getRocketNetworkPrices().getRPLPrice()
   amount: uint256 = self.borrowers[_node].ETH / ethPerRpl
   amount = self._payDebt(_poolId, _node, amount) * ethPerRpl
@@ -437,7 +438,7 @@ def forceClaimMerkleRewards(
   if 0 < _repayETH:
     self._checkFromLender(_poolId)
   assert self.borrowers[_node].RPL < _repayRPL or self.borrowers[_node].ETH < _repayETH, "bal"
-  self._checkEnded(_poolId, _node)
+  self._checkEndedOwing(_poolId, _node)
   totalRPL: uint256 = 0
   totalETH: uint256 = 0
   totalRPL, totalETH = self._claimMerkleRewards(_node, _rewardIndex, _amountRPL, _amountETH, _merkleProof, 0)
@@ -453,7 +454,7 @@ def forceClaimMerkleRewards(
                         self.borrowers[_node].RPL, self.borrowers[_node].ETH,
                         self.borrowers[_node].borrowed, self.borrowers[_node].interest)
 
-# TODO: distribute/refund ETH for liquidation
+# TODO: distribute/distributeMinipools/refund ETH for liquidation
 
 # Borrower actions
 
