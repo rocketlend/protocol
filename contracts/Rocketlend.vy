@@ -361,20 +361,11 @@ def createPool(_params: PoolParams) -> bytes32:
 def _checkFromLender(_poolId: bytes32):
   assert msg.sender == self.lenderAddress[self.params[_poolId].lender], "auth"
 
-@internal
-def _supplyPool(_poolId: bytes32, _amount: uint256):
+@external
+def supplyPool(_poolId: bytes32, _amount: uint256):
   assert RPL.transferFrom(msg.sender, self, _amount), "tf"
   self.pools[_poolId].available += _amount
   log SupplyPool(_poolId, _amount, self.pools[_poolId].available)
-
-@external
-def supplyPool(_poolId: bytes32, _amount: uint256):
-  self._checkFromLender(_poolId)
-  self._supplyPool(_poolId, _amount)
-
-@external
-def supplyPoolOnBehalf(_poolId: bytes32, _amount: uint256):
-  self._supplyPool(_poolId, _amount)
 
 @external
 def setAllowance(_poolId: bytes32, _amount: uint256):
