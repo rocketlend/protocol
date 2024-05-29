@@ -401,6 +401,13 @@ def withdrawInterest(_poolId: bytes32, _amount: uint256, _andSupply: uint256):
   self.pools[_poolId].available += _andSupply
   log WithdrawInterest(_poolId, _amount, _andSupply, self.pools[_poolId].interest, self.pools[_poolId].available)
 
+@external
+def withdrawEtherFromPool(_poolId: bytes32, _amount: uint256):
+  self._checkFromLender(_poolId)
+  self.pools[_poolId].reclaimed -= _amount
+  send(msg.sender, _amount, gas=msg.gas)
+  log WithdrawEtherFromPool(_poolId, _amount, self.pools[_poolId].reclaimed)
+
 @internal
 def _checkEndedOwing(_poolId: bytes32, _node: address):
   endTime: uint256 = self.params[_poolId].endTime
@@ -435,23 +442,6 @@ def forceRepayETH(_poolId: bytes32, _node: address):
   self.borrowers[_node].ETH -= amount
   self.pools[_poolId].reclaimed += amount
   log ForceRepayETH(_poolId, _node, amount, self.borrowers[_node].ETH, self.borrowers[_node].borrowed, self.borrowers[_node].interest)
-
-@external
-def withdrawEtherFromPool(_poolId: bytes32, _amount: uint256):
-  self._checkFromLender(_poolId)
-  self.pools[_poolId].reclaimed -= _amount
-  send(msg.sender, _amount, gas=msg.gas)
-  log WithdrawEtherFromPool(_poolId, _amount, self.pools[_poolId].reclaimed)
-
-@internal
-def _payDebt(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
-  amount: uint256 = _amount
-  if amount <= self.loans[_poolId][_node].interest:
-    amount -= self._repayInterest(_poolId, _node, amount)
-  else:
-    amount -= self._repayInterest(_poolId, _node, self.loans[_poolId][_node].interest)
-    amount -= self._repay(_poolId, _node, min(amount, self.loans[_poolId][_node].borrowed))
-  return amount
 
 @external
 def forceClaimMerkleRewards(
@@ -505,6 +495,16 @@ def forceDistributeRefund(_poolId: bytes32, _node: address,
   self.pools[_poolId].reclaimed += amount
   log ForceDistributeRefund(_poolId, _node, total, amount, self.borrowers[_node].ETH,
                             self.borrowers[_node].borrowed, self.borrowers[_node].interest)
+
+@internal
+def _payDebt(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
+  amount: uint256 = _amount
+  if amount <= self.loans[_poolId][_node].interest:
+    amount -= self._repayInterest(_poolId, _node, amount)
+  else:
+    amount -= self._repayInterest(_poolId, _node, self.loans[_poolId][_node].interest)
+    amount -= self._repay(_poolId, _node, min(amount, self.loans[_poolId][_node].borrowed))
+  return amount
 
 # Borrower actions
 

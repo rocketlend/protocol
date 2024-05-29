@@ -191,9 +191,9 @@ large enough to be practically unlimited.
 - `setAllowance(_poolId: bytes32, _amount: uint256)`
 - `withdrawFromPool(_poolId: bytes32, _amount: uint256)`
 - `withdrawInterest(_poolId: bytes32, _amount: uint256, _andSupply: uint256)`
+- `withdrawEtherFromPool(_poolId: bytes32, _amount: uint256)`
 - `forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256)`
 - `forceRepayETH(_poolId: bytes32, _node: address)`
-- `withdrawEtherFromPool(_poolId: bytes32, _amount: uint256)`
 - `forceClaimMerkleRewards(_poolId: bytes32, _node: address, _repayRPL: uint256, _repayETH: uint256, _rewardIndex: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountRPL: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountETH: DynArray[uint256, MAX_CLAIM_INTERVALS], _merkleProof: DynArray[DynArray[bytes32, MAX_PROOF_LENGTH], MAX_CLAIM_INTERVALS])`
 - `forceDistributeRefund(_poolId: bytes32, _node: address, _distribute: bool, _distributeMinipools: DynArray[address, MAX_NODE_MINIPOOLS], _rewardsOnly: bool, _refundMinipools: DynArray[address, MAX_NODE_MINIPOOLS])`
 
