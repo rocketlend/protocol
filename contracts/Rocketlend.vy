@@ -350,28 +350,40 @@ def _poolId(_params: PoolParams) -> bytes32:
                   ))
 
 @external
-def createPool(_params: PoolParams) -> bytes32:
+def createPool(_params: PoolParams, _andSupply: uint256, _allowance: uint256) -> bytes32:
   assert msg.sender == self.lenderAddress[_params.lender], "auth"
   assert _params.protocolFee == self.protocol.feeNumerator, "fee"
   poolId: bytes32 = self._poolId(_params)
   log CreatePool(poolId, _params)
+  if 0 < _andSupply:
+    self._supplyPool(poolId, _andSupply)
+  if 0 < _allowance:
+    self._setAllowance(poolId, _allowance)
   return poolId
 
 @internal
 def _checkFromLender(_poolId: bytes32):
   assert msg.sender == self.lenderAddress[self.params[_poolId].lender], "auth"
 
-@external
-def supplyPool(_poolId: bytes32, _amount: uint256):
+@internal
+def _supplyPool(_poolId: bytes32, _amount: uint256):
   assert RPL.transferFrom(msg.sender, self, _amount), "tf"
   self.pools[_poolId].available += _amount
   log SupplyPool(_poolId, _amount, self.pools[_poolId].available)
 
 @external
-def setAllowance(_poolId: bytes32, _amount: uint256):
-  self._checkFromLender(_poolId)
+def supplyPool(_poolId: bytes32, _amount: uint256):
+  self._supplyPool(_poolId, _amount)
+
+@internal
+def _setAllowance(_poolId: bytes32, _amount: uint256):
   log SetAllowance(_poolId, self.pools[_poolId].allowance, _amount)
   self.pools[_poolId].allowance = _amount
+
+@external
+def setAllowance(_poolId: bytes32, _amount: uint256):
+  self._checkFromLender(_poolId)
+  self._setAllowance(_poolId, _amount)
 
 @external
 def withdrawFromPool(_poolId: bytes32, _amount: uint256):

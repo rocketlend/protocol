@@ -186,7 +186,7 @@ large enough to be practically unlimited.
 - `registerLender() → uint256`
 - `changeLenderAddress(_lender: uint256, _newAddress: address, _confirm: bool)`
 - `confirmChangeLenderAddress(_lender: uint256)`
-- `createPool(_params: PoolParams) → bytes32`
+- `createPool(_params: PoolParams, _andSupply: uint256, _allowance: uint256) → bytes32`
 - `supplyPool(_poolId: bytes32, _amount: uint256)`
 - `setAllowance(_poolId: bytes32, _amount: uint256)`
 - `withdrawFromPool(_poolId: bytes32, _amount: uint256)`
