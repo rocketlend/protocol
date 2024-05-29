@@ -218,7 +218,7 @@ large enough to be practically unlimited.
 ### Admin functions
 - `changeAdminAddress(_newAddress: address, _confirm: bool)`
 - `confirmChangeAdminAddress()`
-- `updateFeeNumerator(_new: uint256)`
+- `setFeeNumerator(_new: uint256)`
 - `withdrawFees()`
 
 ### Events
@@ -226,7 +226,7 @@ large enough to be practically unlimited.
 - `UpdateAdmin`
     - `old: address`
     - `new: address`
-- `UpdateFeeNumerator`
+- `SetFeeNumerator`
     - `old: uint256`
     - `new: uint256`
 - `WithdrawFees`

@@ -193,7 +193,7 @@ event UpdateAdmin:
   old: indexed(address)
   new: indexed(address)
 
-event UpdateFeeNumerator:
+event SetFeeNumerator:
   old: indexed(uint256)
   new: indexed(uint256)
 
@@ -221,10 +221,10 @@ def confirmChangeAdminAddress():
   self._updateAdminAddress(msg.sender)
 
 @external
-def updateFeeNumerator(_new: uint256):
+def setFeeNumerator(_new: uint256):
   assert msg.sender == self.protocol.address, "auth"
   assert _new <= MAX_FEE_NUMERATOR, "max"
-  log UpdateFeeNumerator(self.protocol.feeNumerator, _new)
+  log SetFeeNumerator(self.protocol.feeNumerator, _new)
   self.protocol.feeNumerator = _new
 
 @external
