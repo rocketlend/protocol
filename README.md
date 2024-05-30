@@ -53,9 +53,12 @@ Each pool is identified by the following parameters:
   Before this time, interest is charged on borrowed RPL. After this time, any
   outstanding debt (including interest) can be seized by the lender from any of
   the borrower's RPL or ETH as it is withdrawn.
+- Protocol fee: the percentage of any repaid RPL that is taken as protocol fee.
+  This is fixed for a pool when the pool is created.
 
 RPL may be supplied to a pool (without changing its parameters) at any time.
-RPL that is not currently borrowed may be withdrawn from the pool at any time.
+RPL that is not currently borrowed may be withdrawn from the pool at any time
+(without fee).
 
 ### Borrower Actions
 
