@@ -154,17 +154,17 @@ large enough to be practically unlimited.
   - `available`: amount of RPL available to be borrowed or returned to the lender
   - `borrowed`: amount of RPL currently borrowed
   - `allowance`: limit on how much RPL can be made available by transferring either borrowed RPL from another of the lender's pools, or interest from another of the lender's loans
-  - `interest`: interest the pool has accrued (available to be claimed by the lender)
+  - `interestPaid`: interest the pool has accrued (available to be claimed by the lender)
   - `reclaimed`: amount of ETH accrued in service of defaults (available to be claimed by the lender)
 
 - `LoanState` (per pool id and node (borrower))
   - `borrowed`: amount of RPL currently borrowed in this loan
   - `startTime`: start time for ongoing interest accumulation on the `borrowed` amount
-  - `interest`: interest due (accrued before `startTime`) but not yet paid by the borrower
+  - `interestDue`: interest due (accrued before `startTime`) but not yet paid by the borrower
 
 - `BorrowerState` (per node)
   - `borrowed`: total RPL borrowed
-  - `interest`: interest due, not including ongoing interest on `borrowed`, but not yet paid
+  - `interestDue`: interest due, not including ongoing interest on `borrowed`, but not yet paid
   - `RPL`: amount of RPL available for (with priority) debt repayments or to be withdrawn
   - `ETH`: amount of ETH available for (with priority) debt repayments on liquidation or to be withdrawn
   - `index`: first not-yet-accounted-for Rocket Pool rewards interval index
@@ -261,7 +261,7 @@ large enough to be practically unlimited.
     - `id: bytes32`
     - `amount: uint256`
     - `supplied: uint256`
-    - `interest: uint256`
+    - `interestPaid: uint256`
     - `available: uint256`
 - `WithdrawEtherFromPool`
     - `id: bytes32`
@@ -273,14 +273,14 @@ large enough to be practically unlimited.
     - `withdrawn: uint256`
     - `available: uint256`
     - `borrowed: uint256`
-    - `interest: uint256`
+    - `interestDue: uint256`
 - `ForceRepayETH`
     - `id: bytes32`
     - `node: address`
     - `amount: uint256`
     - `available: uint256`
     - `borrowed: uint256`
-    - `interest: uint256`
+    - `interestDue: uint256`
 - `ForceClaimRewards`
     - `id: bytes32`
     - `node: address`
@@ -291,7 +291,7 @@ large enough to be practically unlimited.
     - `RPL: uint256`
     - `ETH: uint256`
     - `borrowed: uint256`
-    - `interest: uint256`
+    - `interestDue: uint256`
 - `ForceDistributeRefund`
     - `id: bytes32`
     - `node: address`
@@ -299,7 +299,7 @@ large enough to be practically unlimited.
     - `repaid: uint256`
     - `available: uint256`
     - `borrowed: uint256`
-    - `interest: uint256`
+    - `interestDue: uint256`
 - `UpdateBorrower`
     - `node: address`
     - `old: address`
@@ -315,19 +315,19 @@ large enough to be practically unlimited.
     - `node: address`
     - `amount: uint256`
     - `borrowed: uint256`
-    - `interest: uint256`
+    - `interestDue: uint256`
 - `Repay`
     - `pool: bytes32`
     - `node: address`
     - `amount: uint256`
     - `borrowed: uint256`
-    - `interest: uint256`
+    - `interestDue: uint256`
 - `TransferDebt`
     - `node: address`
     - `fromPool: bytes32`
     - `toPool: bytes32`
     - `amount: uint256`
-    - `interest: uint256`
+    - `interestDue: uint256`
     - `allowance: uint256`
 - `Distribute`
     - `node: address`

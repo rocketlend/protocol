@@ -148,7 +148,7 @@ struct PoolState:
   available: uint256 # RPL available to be returned to the lender
   borrowed: uint256 # total RPL currently borrowed by borrowers
   allowance: uint256 # limit on RPL that can be made available by transferring borrowed from another of this lender's pools (or interest from another loan)
-  interest: uint256 # interest paid to the pool (not yet claimed by lender)
+  interestPaid: uint256 # interest paid to the pool (not yet claimed by lender)
   reclaimed: uint256 # ETH accrued (not yet returned to lender) in service of defaults
 
 pools: public(HashMap[bytes32, PoolState])
@@ -156,13 +156,13 @@ pools: public(HashMap[bytes32, PoolState])
 struct LoanState:
   borrowed: uint256 # RPL currently borrowed
   startTime: uint256 # start time for ongoing interest accumulation on borrowed
-  interest: uint256 # interest already accumulated (and not yet paid)
+  interestDue: uint256 # interest already accumulated (and not yet paid)
 
 loans: public(HashMap[bytes32, HashMap[address, LoanState]])
 
 struct BorrowerState:
   borrowed: uint256 # total RPL borrowed
-  interest: uint256 # interest accumulated (and not yet paid), not including ongoing
+  interestDue: uint256 # interest accumulated (and not yet paid), not including ongoing
   RPL: uint256 # RPL available for repayments and/or withdrawal
   ETH: uint256 # ETH available for liquidation and/or withdrawal
   index: uint256 # first not-yet-accounted interval index
@@ -268,7 +268,7 @@ event WithdrawInterest:
   id: indexed(bytes32)
   amount: indexed(uint256)
   supplied: indexed(uint256)
-  interest: uint256
+  interestPaid: uint256
   available: uint256
 
 event WithdrawEtherFromPool:
@@ -282,7 +282,7 @@ event ForceRepayRPL:
   withdrawn: indexed(uint256)
   available: uint256
   borrowed: uint256
-  interest: uint256
+  interestDue: uint256
 
 event ForceRepayETH:
   id: indexed(bytes32)
@@ -290,7 +290,7 @@ event ForceRepayETH:
   amount: indexed(uint256)
   available: uint256
   borrowed: uint256
-  interest: uint256
+  interestDue: uint256
 
 event ForceClaimRewards:
   id: indexed(bytes32)
@@ -302,7 +302,7 @@ event ForceClaimRewards:
   RPL: uint256
   ETH: uint256
   borrowed: uint256
-  interest: uint256
+  interestDue: uint256
 
 event ForceDistributeRefund:
   id: indexed(bytes32)
@@ -311,7 +311,7 @@ event ForceDistributeRefund:
   repaid: uint256
   available: uint256
   borrowed: uint256
-  interest: uint256
+  interestDue: uint256
 
 @external
 def registerLender() -> uint256:
@@ -395,11 +395,11 @@ def withdrawFromPool(_poolId: bytes32, _amount: uint256):
 @external
 def withdrawInterest(_poolId: bytes32, _amount: uint256, _andSupply: uint256):
   self._checkFromLender(_poolId)
-  self.pools[_poolId].interest -= _amount
+  self.pools[_poolId].interestPaid -= _amount
   if _andSupply < _amount:
     assert RPL.transfer(msg.sender, _amount - _andSupply), "t"
   self.pools[_poolId].available += _andSupply
-  log WithdrawInterest(_poolId, _amount, _andSupply, self.pools[_poolId].interest, self.pools[_poolId].available)
+  log WithdrawInterest(_poolId, _amount, _andSupply, self.pools[_poolId].interestPaid, self.pools[_poolId].available)
 
 @external
 def withdrawEtherFromPool(_poolId: bytes32, _amount: uint256):
@@ -415,7 +415,7 @@ def _checkEndedOwing(_poolId: bytes32, _node: address):
   if self.loans[_poolId][_node].startTime < endTime:
     self._chargeInterest(_poolId, _node, self._outstandingInterest(_poolId, _node, endTime))
     self.loans[_poolId][_node].startTime = endTime
-  assert 0 < self.loans[_poolId][_node].borrowed or 0 < self.loans[_poolId][_node].interest, "paid"
+  assert 0 < self.loans[_poolId][_node].borrowed or 0 < self.loans[_poolId][_node].interestDue, "paid"
 
 @external
 def forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256):
@@ -425,11 +425,11 @@ def forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256):
     self.borrowers[_node].RPL += _withdrawAmount
   available: uint256 = self.borrowers[_node].RPL
   if 0 < _withdrawAmount:
-    assert available <= self.loans[_poolId][_node].interest + self.loans[_poolId][_node].borrowed, "wd"
+    assert available <= self.loans[_poolId][_node].interestDue + self.loans[_poolId][_node].borrowed, "wd"
   available = self._payDebt(_poolId, _node, available)
   assert available < self.borrowers[_node].RPL, "none"
   self.borrowers[_node].RPL = available
-  log ForceRepayRPL(_poolId, _node, _withdrawAmount, available, self.borrowers[_node].borrowed, self.borrowers[_node].interest)
+  log ForceRepayRPL(_poolId, _node, _withdrawAmount, available, self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
 
 @external
 def forceRepayETH(_poolId: bytes32, _node: address):
@@ -441,7 +441,7 @@ def forceRepayETH(_poolId: bytes32, _node: address):
   assert 0 < amount, "none"
   self.borrowers[_node].ETH -= amount
   self.pools[_poolId].reclaimed += amount
-  log ForceRepayETH(_poolId, _node, amount, self.borrowers[_node].ETH, self.borrowers[_node].borrowed, self.borrowers[_node].interest)
+  log ForceRepayETH(_poolId, _node, amount, self.borrowers[_node].ETH, self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
 
 @external
 def forceClaimMerkleRewards(
@@ -471,7 +471,7 @@ def forceClaimMerkleRewards(
     self.pools[_poolId].reclaimed += _repayETH
   log ForceClaimRewards(_poolId, _node, totalRPL, totalETH, _repayRPL, _repayETH,
                         self.borrowers[_node].RPL, self.borrowers[_node].ETH,
-                        self.borrowers[_node].borrowed, self.borrowers[_node].interest)
+                        self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
 
 @external
 def forceDistributeRefund(_poolId: bytes32, _node: address,
@@ -494,15 +494,15 @@ def forceDistributeRefund(_poolId: bytes32, _node: address,
   self.borrowers[_node].ETH -= amount
   self.pools[_poolId].reclaimed += amount
   log ForceDistributeRefund(_poolId, _node, total, amount, self.borrowers[_node].ETH,
-                            self.borrowers[_node].borrowed, self.borrowers[_node].interest)
+                            self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
 
 @internal
 def _payDebt(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
   amount: uint256 = _amount
-  if amount <= self.loans[_poolId][_node].interest:
+  if amount <= self.loans[_poolId][_node].interestDue:
     amount -= self._repayInterest(_poolId, _node, amount)
   else:
-    amount -= self._repayInterest(_poolId, _node, self.loans[_poolId][_node].interest)
+    amount -= self._repayInterest(_poolId, _node, self.loans[_poolId][_node].interestDue)
     amount -= self._repay(_poolId, _node, min(amount, self.loans[_poolId][_node].borrowed))
   return amount
 
@@ -526,21 +526,21 @@ event Borrow:
   node: indexed(address)
   amount: indexed(uint256)
   borrowed: uint256
-  interest: uint256
+  interestDue: uint256
 
 event Repay:
   pool: indexed(bytes32)
   node: indexed(address)
   amount: indexed(uint256)
   borrowed: uint256
-  interest: uint256
+  interestDue: uint256
 
 event TransferDebt:
   node: indexed(address)
   fromPool: indexed(bytes32)
   toPool: indexed(bytes32)
   amount: uint256
-  interest: uint256
+  interestDue: uint256
   allowance: uint256
 
 event Distribute:
@@ -624,7 +624,7 @@ def confirmWithdrawalAddress(_node: address):
 def _checkFinished(_node: address):
   assert msg.sender == _node or msg.sender == self.borrowers[_node].address, "auth"
   assert self.borrowers[_node].borrowed == 0, "b"
-  assert self.borrowers[_node].interest == 0, "i"
+  assert self.borrowers[_node].interestDue == 0, "i"
 
 @external
 def changeWithdrawalAddress(_node: address, _newAddress: address, _confirm: bool):
@@ -675,15 +675,15 @@ def _outstandingInterest(_poolId: bytes32, _node: address, _endTime: uint256) ->
 @internal
 def _chargeInterest(_poolId: bytes32, _node: address, _amount: uint256):
   if 0 < _amount:
-    self.loans[_poolId][_node].interest += _amount
-    self.borrowers[_node].interest += _amount
+    self.loans[_poolId][_node].interestDue += _amount
+    self.borrowers[_node].interestDue += _amount
 
 @internal
 def _repayInterest(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
   if 0 < _amount:
-    self.loans[_poolId][_node].interest -= _amount
-    self.borrowers[_node].interest -= _amount
-    self.pools[_poolId].interest += _amount
+    self.loans[_poolId][_node].interestDue -= _amount
+    self.borrowers[_node].interestDue -= _amount
+    self.pools[_poolId].interestPaid += _amount
   return _amount
 
 @internal
@@ -722,7 +722,7 @@ def _borrowLimit(_node: address) -> uint256:
 @internal
 @view
 def _debt(_node: address) -> uint256:
-  return self.borrowers[_node].borrowed + self.borrowers[_node].interest
+  return self.borrowers[_node].borrowed + self.borrowers[_node].interestDue
 
 @internal
 def _checkBorrowLimit(_node: address):
@@ -743,7 +743,7 @@ def borrow(_poolId: bytes32, _node: address, _amount: uint256):
   self._checkBorrowLimit(_node)
   log Borrow(_poolId, _node, _amount,
              self.loans[_poolId][_node].borrowed,
-             self.loans[_poolId][_node].interest)
+             self.loans[_poolId][_node].interestDue)
 
 @external
 def repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: uint256):
@@ -764,7 +764,7 @@ def repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: u
   assert self._payDebt(_poolId, _node, available) == 0, "bal"
   log Repay(_poolId, _node, _amount + _amountSupplied,
             self.loans[_poolId][_node].borrowed,
-            self.loans[_poolId][_node].interest)
+            self.loans[_poolId][_node].interestDue)
 
 @external
 def transferDebt(_node: address, _fromPool: bytes32, _toPool: bytes32,
@@ -787,8 +787,8 @@ def transferDebt(_node: address, _fromPool: bytes32, _toPool: bytes32,
   if 0 < _fromInterest:
     assert self.params[_fromPool].lender == self.params[_toPool].lender, "lender"
     self.pools[_toPool].allowance -= _fromInterest
-    self.loans[_fromPool][_node].interest -= _fromInterest
-    self.loans[_toPool][_node].interest += _fromInterest
+    self.loans[_fromPool][_node].interestDue -= _fromInterest
+    self.loans[_toPool][_node].interestDue += _fromInterest
   log TransferDebt(_node, _fromPool, _toPool, _fromAvailable, _fromInterest, _fromAllowance)
 
 @internal
