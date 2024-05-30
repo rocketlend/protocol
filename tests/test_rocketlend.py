@@ -1,4 +1,5 @@
 import pytest
+from eth_utils import keccak
 from ape import Contract, reverts
 
 rocketStorageAddresses = dict(
@@ -21,5 +22,5 @@ def deployer(accounts):
 def rocketlend(project, rocketStorage, deployer):
     return project.Rocketlend.deploy(rocketStorage.address, sender=deployer)
 
-def test_deploy(rocketlend):
-    pass
+def test_RPL_token_address(rocketlend, RPLToken):
+    assert rocketlend.RPL() == RPLToken.address
