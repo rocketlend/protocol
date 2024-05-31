@@ -516,6 +516,9 @@ event UpdateBorrower:
 event JoinProtocol:
   node: indexed(address)
 
+event LeaveProtocol:
+  node: indexed(address)
+
 event WithdrawRPL:
   node: indexed(address)
   amount: indexed(uint256)
@@ -586,6 +589,7 @@ def _updateBorrowerAddress(_node: address, _newAddress: address):
 @external
 def changeBorrowerAddress(_node: address, _newAddress: address, _confirm: bool):
   self._checkFromBorrower(_node)
+  assert _newAddress != empty(address), "null"
   if _confirm:
     self._updateBorrowerAddress(_node, _newAddress)
   else:
@@ -608,38 +612,32 @@ def _updateIndex(_node: address, _toIndex: uint256):
   self.borrowers[_node].index = index
 
 @external
-def confirmWithdrawalAddress(_node: address):
+def joinAsBorrower(_node: address):
+  assert self.borrowers[_node].address == empty(address), "j"
   assert not rocketStorage.getBool(
     keccak256(concat(b"node.stake.for.allowed",
                      convert(_node, bytes20),
                      convert(self, bytes20)))), "sfa"
-  if self.borrowers[_node].address == empty(address):
-    self.borrowers[_node].address = rocketStorage.getNodeWithdrawalAddress(_node)
-  rocketStorage.confirmWithdrawalAddress(_node)
+  currentWithdrawalAddress: address = rocketStorage.getNodeWithdrawalAddress(_node)
+  if currentWithdrawalAddress == self:
+    assert msg.sender == _node, "auth"
+    self.borrowers[_node].address = _node
+  else:
+    self.borrowers[_node].address = currentWithdrawalAddress
+    rocketStorage.confirmWithdrawalAddress(_node)
   self._getRocketNodeManager().setRPLWithdrawalAddress(_node, self, True)
   self._updateIndex(_node, self._getRewardsPool().getRewardIndex())
   log JoinProtocol(_node)
 
-@internal
-def _checkFinished(_node: address):
-  assert msg.sender == _node or msg.sender == self.borrowers[_node].address, "auth"
+@external
+def leaveAsBorrower(_node: address):
+  assert msg.sender == self.borrowers[_node].address, "auth"
   assert self.borrowers[_node].borrowed == 0, "b"
   assert self.borrowers[_node].interestDue == 0, "i"
-
-@external
-def changeWithdrawalAddress(_node: address, _newAddress: address, _confirm: bool):
-  self._checkFinished(_node)
-  rocketStorage.setWithdrawalAddress(_node, _newAddress, _confirm)
-
-@external
-def changeRPLWithdrawalAddress(_node: address, _newAddress: address, _confirm: bool):
-  self._checkFinished(_node)
-  self._getRocketNodeManager().setRPLWithdrawalAddress(_node, _newAddress, _confirm)
-
-@external
-def unsetRPLWithdrawalAddress(_node: address):
-  self._checkFinished(_node)
+  rocketStorage.setWithdrawalAddress(_node, msg.sender, True)
   self._getRocketNodeManager().unsetRPLWithdrawalAddress(_node)
+  self.borrowers[_node].address = empty(address)
+  log LeaveProtocol(_node)
 
 @internal
 def _stakeRPLFor(_node: address, _amount: uint256):
@@ -730,11 +728,7 @@ def _checkBorrowLimit(_node: address):
 
 @external
 def borrow(_poolId: bytes32, _node: address, _amount: uint256):
-  assert rocketStorage.getNodeWithdrawalAddress(_node) == self, "pwa"
-  assert self._getRocketNodeManager().getNodeRPLWithdrawalAddressIsSet(_node), "rws"
-  # the commented out assert is unnecessary since stakeRPLFor will fail otherwise
-  # rocketNodeManager: RocketNodeManagerInterface = self._getRocketNodeManager()
-  # assert rocketNodeManager.getNodeRPLWithdrawalAddress(_node) == self, "rwa"
+  self._checkFromBorrower(_node)
   assert block.timestamp < self.params[_poolId].endTime, "end"
   self._stakeRPLFor(_node, _amount)
   self._chargeInterest(_poolId, _node, self._outstandingInterest(_poolId, _node, block.timestamp))

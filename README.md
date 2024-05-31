@@ -204,9 +204,8 @@ large enough to be practically unlimited.
 - `changeBorrowerAddress(_node: address, _newAddress: address, _confirm: bool)`
 - `confirmChangeBorrowerAddress(_node: address)`
 - `confirmWithdrawalAddress(_node: address)`
-- `changeWithdrawalAddress(_node: address, _newAddress: address, _confirm: bool)`
-- `changeRPLWithdrawalAddress(_node: address, _newAddress: address, _confirm: bool)`
-- `unsetRPLWithdrawalAddress(_node: address)`
+- `joinAsBorrower(_node: address)`
+- `leaveAsBorrower(_node: address)`
 - `stakeRPLFor(_node: address, _amount: uint256)`
 - `withdrawRPL(_node: address, _amount: uint256)`
 - `borrow(_poolId: bytes32, _node: address, _amount: uint256)`
@@ -305,6 +304,8 @@ large enough to be practically unlimited.
     - `old: address`
     - `new: address`
 - `JoinProtocol`
+    - `node: address`
+- `LeaveProtocol`
     - `node: address`
 - `WithdrawRPL`
     - `node: address`
