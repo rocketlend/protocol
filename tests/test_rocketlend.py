@@ -15,6 +15,10 @@ def RPLToken(rocketStorage, Contract):
     return Contract(rocketStorage.getAddress(keccak('contract.addressrocketTokenRPL'.encode())))
 
 @pytest.fixture(scope='session')
+def rocketNodeManager(rocketStorage, Contract):
+    return Contract(rocketStorage.getAddress(keccak('contract.addressrocketNodeManager'.encode())))
+
+@pytest.fixture(scope='session')
 def deployer(accounts):
     return accounts[5]
 
@@ -31,9 +35,22 @@ def lender1(accounts):
     return accounts[1]
 
 @pytest.fixture(scope='session')
-def borrower1(rocketStorage, Contract, accounts):
-    rocketNodeManager = Contract(rocketStorage.getAddress(keccak('contract.addressrocketNodeManager'.encode())))
+def lender2(accounts):
+    return accounts[2]
+
+@pytest.fixture(scope='session')
+def borrower1(rocketNodeManager, accounts):
     nodeAddress = rocketNodeManager.getNodeAt(42)
+    return accounts[nodeAddress]
+
+@pytest.fixture(scope='session')
+def borrower2(rocketNodeManager, accounts):
+    nodeAddress = rocketNodeManager.getNodeAt(69)
+    return accounts[nodeAddress]
+
+@pytest.fixture(scope='session')
+def borrowerLender(rocketNodeManager, accounts):
+    nodeAddress = rocketNodeManager.getNodeAt(420)
     return accounts[nodeAddress]
 
 @pytest.fixture()
@@ -111,3 +128,38 @@ def test_change_borrower_other(rocketlendAdmin, borrower1, other):
 def rocketlendReg1(rocketlendAdmin, lender1):
     rocketlendAdmin.registerLender(sender=lender1)
     return rocketlendAdmin
+
+def test_create_expired_pool(rocketlendReg1, lender1):
+    params = dict(lender=0, interestRate=0, endTime=0, protocolFee=0)
+    receipt = rocketlendReg1.createPool(params, 0, 0, sender=lender1)
+    logs = rocketlendReg1.CreatePool.from_receipt(receipt)
+    assert len(logs) == 1
+    assert logs[0]['params'] == list(params.values())
+
+def test_create_pool_wrong_fee(rocketlendReg1, lender1):
+    with reverts('fee'):
+        params = dict(lender=0, interestRate=0, endTime=0, protocolFee=1)
+        rocketlendReg1.createPool(params, 0, 0, sender=lender1)
+
+@pytest.fixture()
+def rocketlendReg2(rocketlendReg1, lender2):
+    rocketlendReg1.registerLender(sender=lender2)
+    return rocketlendReg1
+
+@pytest.fixture()
+def rocketlendbl(rocketlendReg2, borrowerLender):
+    rocketlendReg2.registerLender(sender=borrowerLender)
+    return rocketlendReg2
+
+def test_set_fee_other(rocketlendbl, other):
+    with reverts('auth'):
+        rocketlendbl.setFeeNumerator(100, sender=other)
+
+def test_set_fee_too_high(rocketlendbl, admin):
+    with reverts('max'):
+        rocketlendbl.setFeeNumerator(300000, sender=admin)
+
+@pytest.fixture()
+def rocketlendf(rocketlendbl, admin):
+    rocketlendbl.setFeeNumerator(10000, sender=admin)
+    return rocketlendbl
