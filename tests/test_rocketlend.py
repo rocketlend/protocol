@@ -26,6 +26,16 @@ def admin(accounts):
 def other(accounts):
     return accounts[3]
 
+@pytest.fixture(scope='session')
+def lender1(accounts):
+    return accounts[1]
+
+@pytest.fixture(scope='session')
+def borrower1(rocketStorage, Contract, accounts):
+    rocketNodeManager = Contract(rocketStorage.getAddress(keccak('contract.addressrocketNodeManager'.encode())))
+    nodeAddress = rocketNodeManager.getNodeAt(42)
+    return accounts[nodeAddress]
+
 @pytest.fixture()
 def rocketlend(project, rocketStorage, deployer):
     return deployer.deploy(project.Rocketlend, rocketStorage)
@@ -82,3 +92,22 @@ def test_admin_withdraw_no_fees(rocketlendAdmin, admin, RPLToken):
 def test_create_pool_unregistered(rocketlendAdmin, other):
     with reverts('auth'):
         rocketlendAdmin.createPool(dict(lender=0, interestRate=0, endTime=0, protocolFee=0), 0, 0, sender=other)
+
+def test_register_lender1(rocketlendAdmin, lender1):
+    nextId = rocketlendAdmin.nextLenderId()
+    assert nextId == 0
+    receipt = rocketlendAdmin.registerLender(sender=lender1)
+    assert receipt.return_value == nextId
+    logs = rocketlendAdmin.RegisterLender.from_receipt(receipt)
+    assert len(logs) == 1
+    assert logs[0]['id'] == nextId
+    assert logs[0]['address'] == lender1
+
+def test_change_borrower_other(rocketlendAdmin, borrower1, other):
+    with reverts('auth'):
+        rocketlendAdmin.changeBorrowerAddress(borrower1, other, True, sender=other)
+
+@pytest.fixture()
+def rocketlendReg1(rocketlendAdmin, lender1):
+    rocketlendAdmin.registerLender(sender=lender1)
+    return rocketlendAdmin
