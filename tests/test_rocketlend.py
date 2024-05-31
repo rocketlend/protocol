@@ -205,3 +205,25 @@ def test_borrow_wrong_withdrawal(rocketlendp, borrower1):
     poolId = rocketlendp['poolId']
     with reverts('pwa'):
         rocketlend.borrow(poolId, borrower1, 123, sender=borrower1)
+
+def test_join_protocol_wrong_pending(rocketlendp, borrower1):
+    rocketlend = rocketlendp['rocketlend']
+    with reverts():
+        rocketlend.confirmWithdrawalAddress(borrower1, sender=borrower1)
+
+def test_join_protocol(rocketlendp, borrower1, rocketStorage, accounts):
+    current_wa = accounts[rocketStorage.getNodeWithdrawalAddress(borrower1)]
+    rocketlend = rocketlendp['rocketlend']
+    rocketStorage.setWithdrawalAddress(borrower1, rocketlend, False, sender=current_wa)
+    receipt = rocketlend.confirmWithdrawalAddress(borrower1, sender=current_wa)
+    logs = rocketlend.JoinProtocol.from_receipt(receipt)
+    assert len(logs) == 1
+    assert logs[0]['node'] == borrower1
+
+def test_join_protocol_other(rocketlendp, borrower1, rocketStorage, other, accounts):
+    current_wa = accounts[rocketStorage.getNodeWithdrawalAddress(borrower1)]
+    rocketlend = rocketlendp['rocketlend']
+    rocketStorage.setWithdrawalAddress(borrower1, rocketlend, False, sender=current_wa)
+    receipt = rocketlend.confirmWithdrawalAddress(borrower1, sender=other)
+    logs = rocketlend.JoinProtocol.from_receipt(receipt)
+    assert len(logs) == 1
