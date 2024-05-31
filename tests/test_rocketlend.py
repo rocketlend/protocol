@@ -239,6 +239,13 @@ def test_join_protocol(rocketlendp, node1, rocketStorage, accounts):
     assert logs[0]['node'] == node1
     assert rocketlend.borrowers(node1).address == current_wa
 
+def test_join_protocol_rplwa_set(rocketlendp, node1, rocketStorage, rocketNodeManager, accounts, other):
+    current_wa = accounts[rocketStorage.getNodeWithdrawalAddress(node1)]
+    rocketNodeManager.setRPLWithdrawalAddress(node1, other, True, sender=current_wa)
+    rocketlend = rocketlendp['rocketlend']
+    with reverts():
+        rocketlend.joinAsBorrower(node1, sender=current_wa)
+
 def test_join_protocol_wa_set(rocketlendp, node1, rocketStorage, accounts):
     current_wa = accounts[rocketStorage.getNodeWithdrawalAddress(node1)]
     rocketlend = rocketlendp['rocketlend']
@@ -256,17 +263,29 @@ def test_join_protocol_other(rocketlendp, node1, rocketStorage, other, accounts)
     receipt = rocketlend.joinAsBorrower(node1, sender=other)
     logs = rocketlend.JoinProtocol.from_receipt(receipt)
     assert len(logs) == 1
+    assert rocketlend.borrowers(node1).address == current_wa
 
 @pytest.fixture()
-def node1j(rocketlendp, node1, rocketStorage, accounts):
+def borrower1(rocketlendp, node1, rocketStorage, accounts):
     current_wa = accounts[rocketStorage.getNodeWithdrawalAddress(node1)]
     rocketlend = rocketlendp['rocketlend']
     rocketStorage.setWithdrawalAddress(node1, rocketlend, False, sender=current_wa)
     rocketlend.joinAsBorrower(node1, sender=current_wa)
-    return node1
+    return dict(node=node1, borrower=current_wa)
 
-def test_borrow_from_node(rocketlendp, node1j):
+def test_borrow_from_node(rocketlendp, borrower1):
     rocketlend = rocketlendp['rocketlend']
     poolId = rocketlendp['poolId']
+    node = borrower1['node']
+    assert node.address != borrower1['borrower'].address
     with reverts('auth'):
-        rocketlend.borrow(poolId, node1j, 123, sender=node1j)
+        rocketlend.borrow(poolId, node, 123, sender=node)
+
+def test_borrow_limited(rocketlendp, borrower1):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    node = borrower1['node']
+    borrower = borrower1['borrower']
+    # TODO: ensure node actually doesn't have enough staked assets
+    with reverts('lim'):
+        rocketlend.borrow(poolId, node, 123, sender=borrower)
