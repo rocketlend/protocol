@@ -1,3 +1,5 @@
+import time
+import datetime
 import pytest
 from eth_utils import keccak
 from ape import reverts
@@ -13,6 +15,10 @@ def rocketStorage(chain, Contract):
 @pytest.fixture(scope='session')
 def RPLToken(rocketStorage, Contract):
     return Contract(rocketStorage.getAddress(keccak('contract.addressrocketTokenRPL'.encode())))
+
+@pytest.fixture(scope='session')
+def rocketVaultImpersonated(rocketStorage, accounts):
+    return accounts[rocketStorage.getAddress(keccak('contract.addressrocketVault'.encode()))]
 
 @pytest.fixture(scope='session')
 def rocketNodeManager(rocketStorage, Contract):
@@ -163,3 +169,24 @@ def test_set_fee_too_high(rocketlendbl, admin):
 def rocketlendf(rocketlendbl, admin):
     rocketlendbl.setFeeNumerator(10000, sender=admin)
     return rocketlendbl
+
+def time_from_now(**kwargs):
+    return round(time.time() + datetime.timedelta(**kwargs).total_seconds())
+
+def test_create_pool(rocketlendf, lender2):
+    params = dict(lender=1, interestRate=100, endTime=time_from_now(days=3), protocolFee=10000)
+    receipt = rocketlendf.createPool(params, 0, 0, sender=lender2)
+    logs = rocketlendf.CreatePool.from_receipt(receipt)
+    assert len(logs) == 1
+
+def grab_RPL(who, amount, RPLToken, rocketVaultImpersonated, rocketlend):
+    RPLToken.transfer(who, amount, sender=rocketVaultImpersonated)
+    RPLToken.approve(rocketlend, amount, sender=who)
+
+def test_create_pool_with_supply(rocketlendf, RPLToken, rocketVaultImpersonated, lender2):
+    amount = 20 * 10 ** RPLToken.decimals()
+    grab_RPL(lender2, amount, RPLToken, rocketVaultImpersonated, rocketlendf)
+    params = dict(lender=1, interestRate=100, endTime=time_from_now(days=3), protocolFee=10000)
+    receipt = rocketlendf.createPool(params, 20 * 10 ** 18, 0, sender=lender2)
+    logs = rocketlendf.CreatePool.from_receipt(receipt)
+    assert len(logs) == 1
