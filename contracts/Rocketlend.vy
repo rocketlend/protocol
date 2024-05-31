@@ -354,6 +354,7 @@ def createPool(_params: PoolParams, _andSupply: uint256, _allowance: uint256) ->
   assert msg.sender == self.lenderAddress[_params.lender], "auth"
   assert _params.protocolFee == self.protocol.feeNumerator, "fee"
   poolId: bytes32 = self._poolId(_params)
+  self.params[poolId] = _params
   log CreatePool(poolId, _params)
   if 0 < _andSupply:
     self._supplyPool(poolId, _andSupply)
