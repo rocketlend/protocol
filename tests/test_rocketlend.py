@@ -45,9 +45,12 @@ def lender2(accounts):
     return accounts[2]
 
 @pytest.fixture(scope='session')
-def borrower1(rocketNodeManager, accounts):
+def node1(rocketNodeManager, rocketStorage, accounts):
     nodeAddress = rocketNodeManager.getNodeAt(42)
-    return accounts[nodeAddress]
+    node = accounts[nodeAddress]
+    if rocketStorage.getNodeWithdrawalAddress(node) == node:
+        rocketStorage.setWithdrawalAddress(node, accounts[0], True, sender=node)
+    return node
 
 @pytest.fixture(scope='session')
 def borrower2(rocketNodeManager, accounts):
@@ -126,9 +129,9 @@ def test_register_lender1(rocketlendAdmin, lender1):
     assert logs[0]['id'] == nextId
     assert logs[0]['address'] == lender1
 
-def test_change_borrower_other(rocketlendAdmin, borrower1, other):
+def test_change_borrower_other(rocketlendAdmin, node1, other):
     with reverts('auth'):
-        rocketlendAdmin.changeBorrowerAddress(borrower1, other, True, sender=other)
+        rocketlendAdmin.changeBorrowerAddress(node1, other, True, sender=other)
 
 @pytest.fixture()
 def rocketlendReg1(rocketlendAdmin, lender1):
@@ -195,35 +198,75 @@ def test_create_pool_with_supply(rocketlendf, RPLToken, rocketVaultImpersonated,
 def rocketlendp(rocketlendf, RPLToken, rocketVaultImpersonated, lender2):
     amount = 200 * 10 ** RPLToken.decimals()
     grab_RPL(lender2, amount, RPLToken, rocketVaultImpersonated, rocketlendf)
-    params = dict(lender=1, interestRate=100_000, endTime=time_from_now(weeks=2), protocolFee=10000)
+    endTime=time_from_now(weeks=2)
+    params = dict(lender=1, interestRate=100_000, endTime=endTime, protocolFee=10000)
     receipt = rocketlendf.createPool(params, amount, 0, sender=lender2)
     poolId = rocketlendf.CreatePool.from_receipt(receipt)[0].id
-    return dict(receipt=receipt, rocketlend=rocketlendf, poolId=poolId)
+    return dict(receipt=receipt, rocketlend=rocketlendf, poolId=poolId, endTime=endTime)
 
-def test_borrow_not_joined(rocketlendp, borrower1):
+def test_lender_set(rocketlendp):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    assert rocketlend.params(poolId).lender == 1
+
+def test_end_time_set(rocketlendp):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    endTime = rocketlend.params(poolId).endTime
+    assert endTime == rocketlendp['endTime']
+    assert 0 < endTime
+    assert (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=13) <
+            datetime.datetime.fromtimestamp(endTime, datetime.timezone.utc))
+
+def test_borrow_not_joined(rocketlendp, node1):
     rocketlend = rocketlendp['rocketlend']
     poolId = rocketlendp['poolId']
     with reverts('auth'):
-        rocketlend.borrow(poolId, borrower1, 123, sender=borrower1)
+        rocketlend.borrow(poolId, node1, 123, sender=node1)
 
-def test_join_protocol_wrong_pending(rocketlendp, borrower1):
+def test_join_protocol_wrong_pending(rocketlendp, node1):
     rocketlend = rocketlendp['rocketlend']
     with reverts():
-        rocketlend.joinAsBorrower(borrower1, sender=borrower1)
+        rocketlend.joinAsBorrower(node1, sender=node1)
 
-def test_join_protocol(rocketlendp, borrower1, rocketStorage, accounts):
-    current_wa = accounts[rocketStorage.getNodeWithdrawalAddress(borrower1)]
+def test_join_protocol(rocketlendp, node1, rocketStorage, accounts):
+    current_wa = accounts[rocketStorage.getNodeWithdrawalAddress(node1)]
     rocketlend = rocketlendp['rocketlend']
-    rocketStorage.setWithdrawalAddress(borrower1, rocketlend, False, sender=current_wa)
-    receipt = rocketlend.joinAsBorrower(borrower1, sender=current_wa)
+    rocketStorage.setWithdrawalAddress(node1, rocketlend, False, sender=current_wa)
+    receipt = rocketlend.joinAsBorrower(node1, sender=current_wa)
     logs = rocketlend.JoinProtocol.from_receipt(receipt)
     assert len(logs) == 1
-    assert logs[0]['node'] == borrower1
+    assert logs[0]['node'] == node1
+    assert rocketlend.borrowers(node1).address == current_wa
 
-def test_join_protocol_other(rocketlendp, borrower1, rocketStorage, other, accounts):
-    current_wa = accounts[rocketStorage.getNodeWithdrawalAddress(borrower1)]
+def test_join_protocol_wa_set(rocketlendp, node1, rocketStorage, accounts):
+    current_wa = accounts[rocketStorage.getNodeWithdrawalAddress(node1)]
     rocketlend = rocketlendp['rocketlend']
-    rocketStorage.setWithdrawalAddress(borrower1, rocketlend, False, sender=current_wa)
-    receipt = rocketlend.joinAsBorrower(borrower1, sender=other)
+    rocketStorage.setWithdrawalAddress(node1, rocketlend, True, sender=current_wa)
+    receipt = rocketlend.joinAsBorrower(node1, sender=current_wa)
     logs = rocketlend.JoinProtocol.from_receipt(receipt)
     assert len(logs) == 1
+    assert logs[0]['node'] == node1
+    assert rocketlend.borrowers(node1).address == node1
+
+def test_join_protocol_other(rocketlendp, node1, rocketStorage, other, accounts):
+    current_wa = accounts[rocketStorage.getNodeWithdrawalAddress(node1)]
+    rocketlend = rocketlendp['rocketlend']
+    rocketStorage.setWithdrawalAddress(node1, rocketlend, False, sender=current_wa)
+    receipt = rocketlend.joinAsBorrower(node1, sender=other)
+    logs = rocketlend.JoinProtocol.from_receipt(receipt)
+    assert len(logs) == 1
+
+@pytest.fixture()
+def node1j(rocketlendp, node1, rocketStorage, accounts):
+    current_wa = accounts[rocketStorage.getNodeWithdrawalAddress(node1)]
+    rocketlend = rocketlendp['rocketlend']
+    rocketStorage.setWithdrawalAddress(node1, rocketlend, False, sender=current_wa)
+    rocketlend.joinAsBorrower(node1, sender=current_wa)
+    return node1
+
+def test_borrow_from_node(rocketlendp, node1j):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    with reverts('auth'):
+        rocketlend.borrow(poolId, node1j, 123, sender=node1j)
