@@ -187,6 +187,21 @@ def test_create_pool_with_supply(rocketlendf, RPLToken, rocketVaultImpersonated,
     amount = 20 * 10 ** RPLToken.decimals()
     grab_RPL(lender2, amount, RPLToken, rocketVaultImpersonated, rocketlendf)
     params = dict(lender=1, interestRate=100, endTime=time_from_now(days=3), protocolFee=10000)
-    receipt = rocketlendf.createPool(params, 20 * 10 ** 18, 0, sender=lender2)
+    receipt = rocketlendf.createPool(params, amount, 0, sender=lender2)
     logs = rocketlendf.CreatePool.from_receipt(receipt)
     assert len(logs) == 1
+
+@pytest.fixture()
+def rocketlendp(rocketlendf, RPLToken, rocketVaultImpersonated, lender2):
+    amount = 200 * 10 ** RPLToken.decimals()
+    grab_RPL(lender2, amount, RPLToken, rocketVaultImpersonated, rocketlendf)
+    params = dict(lender=1, interestRate=100_000, endTime=time_from_now(weeks=2), protocolFee=10000)
+    receipt = rocketlendf.createPool(params, amount, 0, sender=lender2)
+    poolId = rocketlendf.CreatePool.from_receipt(receipt)[0].id
+    return dict(receipt=receipt, rocketlend=rocketlendf, poolId=poolId)
+
+def test_borrow_wrong_withdrawal(rocketlendp, borrower1):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    with reverts('pwa'):
+        rocketlend.borrow(poolId, borrower1, 123, sender=borrower1)
