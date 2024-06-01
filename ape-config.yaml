@@ -2,7 +2,7 @@ plugins:
   - name: vyper
   - name: foundry
   - name: etherscan
-geth:
+node:
   ethereum:
     mainnet:
       uri: http://localhost:8545
