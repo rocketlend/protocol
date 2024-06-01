@@ -61,12 +61,12 @@ def node1(rocketNodeManager, rocketStorage, accounts):
     return node
 
 @pytest.fixture()
-def borrower2(rocketNodeManager, accounts):
+def node2(rocketNodeManager, accounts):
     nodeAddress = rocketNodeManager.getNodeAt(69)
     return accounts[nodeAddress]
 
 @pytest.fixture()
-def borrowerLender(rocketNodeManager, accounts):
+def node3(rocketNodeManager, accounts):
     nodeAddress = rocketNodeManager.getNodeAt(420)
     return accounts[nodeAddress]
 
@@ -164,8 +164,8 @@ def rocketlendReg2(rocketlendReg1, lender2):
     return rocketlendReg1
 
 @pytest.fixture()
-def rocketlendbl(rocketlendReg2, borrowerLender):
-    rocketlendReg2.registerLender(sender=borrowerLender)
+def rocketlendbl(rocketlendReg2, node3):
+    rocketlendReg2.registerLender(sender=node3)
     return rocketlendReg2
 
 def test_set_fee_other(rocketlendbl, other):
@@ -304,3 +304,20 @@ def test_borrow_limited(rocketlendp, borrower1, rocketNodeStaking, rocketNodeDep
     assert rocketNodeStaking.getNodeETHProvided(node) + rocketNodeDeposit.getNodeEthBalance(node) == 0
     with reverts('lim'):
         rocketlend.borrow(poolId, node, 123, sender=borrower)
+
+def test_borrow_against_credit(rocketlendp, borrower1, other, rocketNodeDeposit):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    node = borrower1['node']
+    borrower = borrower1['borrower']
+    amount = 123
+    rocketNodeDeposit.depositEthFor(node, value='2 ether', sender=other)
+    receipt = rocketlend.borrow(poolId, node, amount, sender=borrower)
+    logs = rocketlend.Borrow.from_receipt(receipt)
+    assert len(logs) == 1
+    log = logs[0]
+    assert log['pool'] == poolId
+    assert log['node'] == node
+    assert log['amount'] == amount
+    assert log['borrowed'] == amount
+    assert log['interestDue'] == 0
