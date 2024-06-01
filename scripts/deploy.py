@@ -11,7 +11,7 @@ def main():
     provider_uri = networks.active_provider.uri
     if network_name != 'holesky-fork':
         raise f'Only holesky-fork is currently supported, not {network_name}'
-    accounts.test_accounts[0].deploy(project.Rocketlend, rocketStorageAddresses['holesky'])
+    accounts.test_accounts[0].deploy(project.rocketlend, rocketStorageAddresses['holesky'])
     print(f'RPC available at {provider_uri}')
     warnings.filterwarnings('ignore')
     IPython.embed()

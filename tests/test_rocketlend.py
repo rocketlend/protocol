@@ -72,7 +72,7 @@ def node3(rocketNodeManager, accounts):
 
 @pytest.fixture()
 def rocketlend(project, rocketStorage, deployer):
-    return deployer.deploy(project.Rocketlend, rocketStorage)
+    return deployer.deploy(project.rocketlend, rocketStorage)
 
 def test_RPL_token_address(rocketlend, RPLToken):
     assert rocketlend.RPL() == RPLToken.address
