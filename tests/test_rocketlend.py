@@ -8,43 +8,51 @@ rocketStorageAddresses = dict(
         mainnet='0x1d8f8f00cfa6758d7bE78336684788Fb0ee0Fa46',
         holesky='0x594Fb75D3dc2DFa0150Ad03F99F97817747dd4E1')
 
-@pytest.fixture(scope='session')
+@pytest.fixture()
 def rocketStorage(chain, Contract):
     return Contract(rocketStorageAddresses[chain.provider.network.name.removesuffix('-fork')])
 
-@pytest.fixture(scope='session')
+@pytest.fixture()
 def RPLToken(rocketStorage, Contract):
     return Contract(rocketStorage.getAddress(keccak('contract.addressrocketTokenRPL'.encode())))
 
-@pytest.fixture(scope='session')
+@pytest.fixture()
 def rocketVaultImpersonated(rocketStorage, accounts):
     return accounts[rocketStorage.getAddress(keccak('contract.addressrocketVault'.encode()))]
 
-@pytest.fixture(scope='session')
+@pytest.fixture()
 def rocketNodeManager(rocketStorage, Contract):
     return Contract(rocketStorage.getAddress(keccak('contract.addressrocketNodeManager'.encode())))
 
-@pytest.fixture(scope='session')
+@pytest.fixture()
+def rocketNodeStaking(rocketStorage, Contract):
+    return Contract(rocketStorage.getAddress(keccak('contract.addressrocketNodeStaking'.encode())))
+
+@pytest.fixture()
+def rocketNodeDeposit(rocketStorage, Contract):
+    return Contract(rocketStorage.getAddress(keccak('contract.addressrocketNodeDeposit'.encode())))
+
+@pytest.fixture()
 def deployer(accounts):
     return accounts[5]
 
-@pytest.fixture(scope='session')
+@pytest.fixture()
 def admin(accounts):
     return accounts[4]
 
-@pytest.fixture(scope='session')
+@pytest.fixture()
 def other(accounts):
     return accounts[3]
 
-@pytest.fixture(scope='session')
+@pytest.fixture()
 def lender1(accounts):
     return accounts[1]
 
-@pytest.fixture(scope='session')
+@pytest.fixture()
 def lender2(accounts):
     return accounts[2]
 
-@pytest.fixture(scope='session')
+@pytest.fixture()
 def node1(rocketNodeManager, rocketStorage, accounts):
     nodeAddress = rocketNodeManager.getNodeAt(42)
     node = accounts[nodeAddress]
@@ -52,12 +60,12 @@ def node1(rocketNodeManager, rocketStorage, accounts):
         rocketStorage.setWithdrawalAddress(node, accounts[0], True, sender=node)
     return node
 
-@pytest.fixture(scope='session')
+@pytest.fixture()
 def borrower2(rocketNodeManager, accounts):
     nodeAddress = rocketNodeManager.getNodeAt(69)
     return accounts[nodeAddress]
 
-@pytest.fixture(scope='session')
+@pytest.fixture()
 def borrowerLender(rocketNodeManager, accounts):
     nodeAddress = rocketNodeManager.getNodeAt(420)
     return accounts[nodeAddress]
@@ -246,11 +254,18 @@ def test_join_protocol_rplwa_set(rocketlendp, node1, rocketStorage, rocketNodeMa
     with reverts():
         rocketlend.joinAsBorrower(node1, sender=current_wa)
 
+def test_join_protocol_wa_set_prev(rocketlendp, node1, rocketStorage, accounts):
+    current_wa = accounts[rocketStorage.getNodeWithdrawalAddress(node1)]
+    rocketlend = rocketlendp['rocketlend']
+    rocketStorage.setWithdrawalAddress(node1, rocketlend, True, sender=current_wa)
+    with reverts('auth'):
+        rocketlend.joinAsBorrower(node1, sender=current_wa)
+
 def test_join_protocol_wa_set(rocketlendp, node1, rocketStorage, accounts):
     current_wa = accounts[rocketStorage.getNodeWithdrawalAddress(node1)]
     rocketlend = rocketlendp['rocketlend']
     rocketStorage.setWithdrawalAddress(node1, rocketlend, True, sender=current_wa)
-    receipt = rocketlend.joinAsBorrower(node1, sender=current_wa)
+    receipt = rocketlend.joinAsBorrower(node1, sender=node1)
     logs = rocketlend.JoinProtocol.from_receipt(receipt)
     assert len(logs) == 1
     assert logs[0]['node'] == node1
@@ -281,11 +296,11 @@ def test_borrow_from_node(rocketlendp, borrower1):
     with reverts('auth'):
         rocketlend.borrow(poolId, node, 123, sender=node)
 
-def test_borrow_limited(rocketlendp, borrower1):
+def test_borrow_limited(rocketlendp, borrower1, rocketNodeStaking, rocketNodeDeposit):
     rocketlend = rocketlendp['rocketlend']
     poolId = rocketlendp['poolId']
     node = borrower1['node']
     borrower = borrower1['borrower']
-    # TODO: ensure node actually doesn't have enough staked assets
+    assert rocketNodeStaking.getNodeETHProvided(node) + rocketNodeDeposit.getNodeEthBalance(node) == 0
     with reverts('lim'):
         rocketlend.borrow(poolId, node, 123, sender=borrower)
