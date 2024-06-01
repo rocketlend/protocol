@@ -2,11 +2,5 @@ plugins:
   - name: vyper
   - name: foundry
   - name: etherscan
-node:
-  ethereum:
-    mainnet:
-      uri: http://localhost:8545
-    holesky:
-      uri: http://localhost:8546
 foundry:
   host: auto
