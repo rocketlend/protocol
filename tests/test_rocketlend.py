@@ -210,12 +210,13 @@ def rocketlendp(rocketlendf, RPLToken, rocketVaultImpersonated, lender2):
     params = dict(lender=1, interestRate=100_000, endTime=endTime, protocolFee=10000)
     receipt = rocketlendf.createPool(params, amount, 0, sender=lender2)
     poolId = rocketlendf.CreatePool.from_receipt(receipt)[0].id
-    return dict(receipt=receipt, rocketlend=rocketlendf, poolId=poolId, endTime=endTime)
+    return dict(receipt=receipt, lenderId=1, lender=lender2, rocketlend=rocketlendf, poolId=poolId, endTime=endTime)
 
 def test_lender_set(rocketlendp):
     rocketlend = rocketlendp['rocketlend']
     poolId = rocketlendp['poolId']
-    assert rocketlend.params(poolId).lender == 1
+    lender = rocketlendp['lenderId']
+    assert rocketlend.params(poolId).lender == lender
 
 def test_end_time_set(rocketlendp):
     rocketlend = rocketlendp['rocketlend']
@@ -305,13 +306,13 @@ def test_borrow_limited(rocketlendp, borrower1, rocketNodeStaking, rocketNodeDep
     with reverts('lim'):
         rocketlend.borrow(poolId, node, 123, sender=borrower)
 
-def test_borrow_against_credit(rocketlendp, borrower1, other, rocketNodeDeposit):
+def test_borrow_against_credit(rocketlendp, borrower1, RPLToken, other, rocketNodeDeposit):
     rocketlend = rocketlendp['rocketlend']
     poolId = rocketlendp['poolId']
     node = borrower1['node']
     borrower = borrower1['borrower']
-    amount = 123
-    rocketNodeDeposit.depositEthFor(node, value='2 ether', sender=other)
+    amount = 10 * 10 ** RPLToken.decimals()
+    rocketNodeDeposit.depositEthFor(node, value='4 ether', sender=other)
     receipt = rocketlend.borrow(poolId, node, amount, sender=borrower)
     logs = rocketlend.Borrow.from_receipt(receipt)
     assert len(logs) == 1
@@ -321,3 +322,24 @@ def test_borrow_against_credit(rocketlendp, borrower1, other, rocketNodeDeposit)
     assert log['amount'] == amount
     assert log['borrowed'] == amount
     assert log['interestDue'] == 0
+
+@pytest.fixture()
+def borrower1b(rocketlendp, RPLToken, rocketNodeDeposit, borrower1, other):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    node = borrower1['node']
+    borrower = borrower1['borrower']
+    amount = 50 * 10 ** RPLToken.decimals()
+    rocketNodeDeposit.depositEthFor(node, value='8 ether', sender=other)
+    rocketlend.borrow(poolId, node, amount, sender=borrower)
+    return borrower1
+
+def test_force_repay_not_ended(rocketlendp, borrower1b):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    node = borrower1b['node']
+    lender = rocketlendp['lender']
+    with reverts('term'):
+        rocketlend.forceRepayRPL(poolId, node, 123, sender=lender)
+    with reverts('term'):
+        rocketlend.forceRepayETH(poolId, node, sender=lender)
