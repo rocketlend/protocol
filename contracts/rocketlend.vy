@@ -173,6 +173,7 @@ borrowers: public(HashMap[address, BorrowerState])
 intervals: public(HashMap[address, HashMap[uint256, bool]]) # intervals known to be claimed (up to borrowers[_].index)
 
 oneRPL: immutable(uint256)
+oneEther: constant(uint256) = 10 ** 18
 
 @external
 def __init__(_rocketStorage: address):
@@ -715,6 +716,7 @@ def _availableEther(_node: address) -> uint256:
 @view
 def _borrowLimit(_node: address) -> uint256:
   return (self._availableEther(_node)
+          * oneEther
           / self._getRocketNetworkPrices().getRPLPrice()
           + self.borrowers[_node].RPL)
 
