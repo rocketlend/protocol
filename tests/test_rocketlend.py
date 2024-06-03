@@ -289,6 +289,28 @@ def borrower1(rocketlendp, node1, rocketStorage, accounts):
     rocketlend.joinAsBorrower(node1, sender=current_wa)
     return dict(node=node1, borrower=current_wa)
 
+def test_leave_protocol_not_joined(rocketlendp, node1):
+    rocketlend = rocketlendp['rocketlend']
+    with reverts('auth'):
+        rocketlend.leaveAsBorrower(node1, sender=node1)
+
+
+def test_leave_protocol_wrong_sender(rocketlendp, borrower1, other):
+    rocketlend = rocketlendp['rocketlend']
+    borrower = borrower1['borrower']
+    node = borrower1['node']
+    with reverts('auth'):
+        rocketlend.leaveAsBorrower(node, sender=other)
+
+def test_leave_protocol(rocketlendp, borrower1):
+    rocketlend = rocketlendp['rocketlend']
+    borrower = borrower1['borrower']
+    node = borrower1['node']
+    receipt = rocketlend.leaveAsBorrower(node, sender=borrower)
+    logs = rocketlend.LeaveProtocol.from_receipt(receipt)
+    assert len(logs) == 1
+    assert logs[0]['node'] == node
+
 def test_borrow_from_node(rocketlendp, borrower1):
     rocketlend = rocketlendp['rocketlend']
     poolId = rocketlendp['poolId']
@@ -343,3 +365,10 @@ def test_force_repay_not_ended(rocketlendp, borrower1b):
         rocketlend.forceRepayRPL(poolId, node, 123, sender=lender)
     with reverts('term'):
         rocketlend.forceRepayETH(poolId, node, sender=lender)
+
+def test_leave_with_debt(rocketlendp, borrower1b):
+    rocketlend = rocketlendp['rocketlend']
+    borrower = borrower1b['borrower']
+    node = borrower1b['node']
+    with reverts('b'):
+        rocketlend.leaveAsBorrower(node, sender=borrower)
