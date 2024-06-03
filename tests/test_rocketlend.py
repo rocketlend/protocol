@@ -289,11 +289,17 @@ def borrower1(rocketlendp, node1, rocketStorage, accounts):
     rocketlend.joinAsBorrower(node1, sender=current_wa)
     return dict(node=node1, borrower=current_wa)
 
+def test_join_twice(rocketlendp, borrower1):
+    node = borrower1['node']
+    borrower = borrower1['borrower']
+    rocketlend = rocketlendp['rocketlend']
+    with reverts('j'):
+        rocketlend.joinAsBorrower(node, sender=borrower)
+
 def test_leave_protocol_not_joined(rocketlendp, node1):
     rocketlend = rocketlendp['rocketlend']
     with reverts('auth'):
         rocketlend.leaveAsBorrower(node1, sender=node1)
-
 
 def test_leave_protocol_wrong_sender(rocketlendp, borrower1, other):
     rocketlend = rocketlendp['rocketlend']
@@ -310,6 +316,25 @@ def test_leave_protocol(rocketlendp, borrower1):
     logs = rocketlend.LeaveProtocol.from_receipt(receipt)
     assert len(logs) == 1
     assert logs[0]['node'] == node
+
+def test_leave_rejoin_wa_unset(rocketlendp, borrower1):
+    rocketlend = rocketlendp['rocketlend']
+    borrower = borrower1['borrower']
+    node = borrower1['node']
+    rocketlend.leaveAsBorrower(node, sender=borrower)
+    with reverts():
+        rocketlend.joinAsBorrower(node, sender=borrower)
+
+def test_leave_rejoin(rocketlendp, borrower1, rocketStorage):
+    rocketlend = rocketlendp['rocketlend']
+    borrower = borrower1['borrower']
+    node = borrower1['node']
+    rocketlend.leaveAsBorrower(node, sender=borrower)
+    rocketStorage.setWithdrawalAddress(node, rocketlend, False, sender=borrower)
+    receipt = rocketlend.joinAsBorrower(node, sender=borrower)
+    logs = rocketlend.JoinProtocol.from_receipt(receipt)
+    assert len(logs) == 1
+    assert rocketlend.borrowers(node).address == borrower
 
 def test_borrow_from_node(rocketlendp, borrower1):
     rocketlend = rocketlendp['rocketlend']
@@ -354,7 +379,12 @@ def borrower1b(rocketlendp, RPLToken, rocketNodeDeposit, borrower1, other):
     amount = 50 * 10 ** RPLToken.decimals()
     rocketNodeDeposit.depositEthFor(node, value='8 ether', sender=other)
     rocketlend.borrow(poolId, node, amount, sender=borrower)
-    return borrower1
+    return dict(borrower1, amount=amount)
+
+def test_view_borrowed(rocketlendp, borrower1b):
+    rocketlend = rocketlendp['rocketlend']
+    node = borrower1b['node']
+    assert rocketlend.borrowers(node)['borrowed'] == borrower1b['amount']
 
 def test_force_repay_not_ended(rocketlendp, borrower1b):
     rocketlend = rocketlendp['rocketlend']
