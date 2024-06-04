@@ -192,7 +192,8 @@ def test_create_pool(rocketlendf, lender2):
 
 def grab_RPL(who, amount, RPLToken, rocketVaultImpersonated, rocketlend):
     RPLToken.transfer(who, amount, sender=rocketVaultImpersonated)
-    RPLToken.approve(rocketlend, amount, sender=who)
+    if rocketlend:
+        RPLToken.approve(rocketlend, amount, sender=who)
 
 def test_create_pool_with_supply(rocketlendf, RPLToken, rocketVaultImpersonated, lender2):
     amount = 20 * 10 ** RPLToken.decimals()
@@ -402,3 +403,23 @@ def test_leave_with_debt(rocketlendp, borrower1b):
     node = borrower1b['node']
     with reverts('b'):
         rocketlend.leaveAsBorrower(node, sender=borrower)
+
+def test_repay_partial_supply_unapproved(rocketlendp, RPLToken, rocketVaultImpersonated, borrower1b):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    node = borrower1b['node']
+    borrower = borrower1b['borrower']
+    supply = 42 * 10 ** RPLToken.decimals()
+    grab_RPL(borrower, supply, RPLToken, rocketVaultImpersonated, None)
+    with reverts('ERC20: transfer amount exceeds allowance'):
+        rocketlend.repay(poolId, node, 0, supply, sender=borrower)
+
+def test_repay_partial_supply_other(rocketlendp, RPLToken, rocketVaultImpersonated, borrower1b, other):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    node = borrower1b['node']
+    supply = 42 * 10 ** RPLToken.decimals()
+    grab_RPL(other, supply, RPLToken, rocketVaultImpersonated, rocketlend)
+    receipt = rocketlend.repay(poolId, node, 0, supply, sender=other)
+    logs = rocketlend.Repay.from_receipt(receipt)
+    assert len(logs) == 1

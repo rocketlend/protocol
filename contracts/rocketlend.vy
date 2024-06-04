@@ -753,8 +753,9 @@ def repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: u
   if self.borrowers[_node].RPL < _amount:
     rocketNodeStaking.withdrawRPL(_node, _amount - self.borrowers[_node].RPL)
     self.borrowers[_node].RPL = _amount
-  self.borrowers[_node].RPL -= _amount
-  available += _amount
+  if 0 < _amount:
+    self.borrowers[_node].RPL -= _amount
+    available += _amount
   if 0 < _amountSupplied:
     assert RPL.transferFrom(msg.sender, self, _amountSupplied), "tf"
     available += _amountSupplied
