@@ -379,8 +379,8 @@ def borrower1b(rocketlendp, RPLToken, rocketNodeDeposit, borrower1, other):
     borrower = borrower1['borrower']
     amount = 50 * 10 ** RPLToken.decimals()
     rocketNodeDeposit.depositEthFor(node, value='8 ether', sender=other)
-    rocketlend.borrow(poolId, node, amount, sender=borrower)
-    return dict(borrower1, amount=amount)
+    receipt = rocketlend.borrow(poolId, node, amount, sender=borrower)
+    return dict(borrower1, amount=amount, receipt=receipt)
 
 def test_view_borrowed(rocketlendp, borrower1b):
     rocketlend = rocketlendp['rocketlend']
@@ -423,3 +423,39 @@ def test_repay_partial_supply_other(rocketlendp, RPLToken, rocketVaultImpersonat
     receipt = rocketlend.repay(poolId, node, 0, supply, sender=other)
     logs = rocketlend.Repay.from_receipt(receipt)
     assert len(logs) == 1
+    log = logs[0]
+    poolState = rocketlend.pools(poolId)
+    assert log['interestDue'] == 0
+    assert log['borrowed'] == borrower1b['amount'] - (supply - poolState['interestPaid'])
+    assert poolState['borrowed'] == log['borrowed']
+
+def test_repay_withdraw_unauth(rocketlendp, RPLToken, borrower1b, other):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    node = borrower1b['node']
+    amount = 2 * 10 ** RPLToken.decimals()
+    with reverts('auth'):
+        rocketlend.repay(poolId, node, amount, 0, sender=other)
+
+def test_repay_cannot_withdraw(rocketlendp, RPLToken, borrower1b):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    node = borrower1b['node']
+    borrower = borrower1b['borrower']
+    amount = 2 * 10 ** RPLToken.decimals()
+    with reverts():
+        rocketlend.repay(poolId, node, amount, 0, sender=borrower)
+
+def test_repay_by_withdraw(rocketlendp, RPLToken, borrower1b, rocketNodeStaking, chain):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    node = borrower1b['node']
+    borrower = borrower1b['borrower']
+    amount = 2 * 10 ** RPLToken.decimals()
+    stakeBefore = rocketNodeStaking.getNodeRPLStake(node)
+    chain.pending_timestamp += round(datetime.timedelta(hours=12, days=28).total_seconds())
+    receipt = rocketlend.repay(poolId, node, amount, 0, sender=borrower)
+    stakeAfter = rocketNodeStaking.getNodeRPLStake(node)
+    logs = rocketlend.Repay.from_receipt(receipt)
+    assert len(logs) == 1
+    assert stakeBefore - stakeAfter == amount
