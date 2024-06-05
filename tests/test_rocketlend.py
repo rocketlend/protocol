@@ -459,3 +459,54 @@ def test_repay_by_withdraw(rocketlendp, RPLToken, borrower1b, rocketNodeStaking,
     logs = rocketlend.Repay.from_receipt(receipt)
     assert len(logs) == 1
     assert stakeBefore - stakeAfter == amount
+
+def test_repay_withdraw_and_supply(rocketlendp, RPLToken, rocketVaultImpersonated, borrower1b, rocketNodeStaking, chain):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    node = borrower1b['node']
+    borrower = borrower1b['borrower']
+    amount = 2 * 10 ** RPLToken.decimals()
+    supply = amount
+    grab_RPL(borrower, supply, RPLToken, rocketVaultImpersonated, rocketlend)
+    stakeBefore = rocketNodeStaking.getNodeRPLStake(node)
+    chain.pending_timestamp += round(datetime.timedelta(hours=12, days=28).total_seconds())
+    receipt = rocketlend.repay(poolId, node, amount, supply, sender=borrower)
+    stakeAfter = rocketNodeStaking.getNodeRPLStake(node)
+    logs = rocketlend.Repay.from_receipt(receipt)
+    assert len(logs) == 1
+    log = logs[0]
+    assert stakeBefore - stakeAfter == amount
+    poolState = rocketlend.pools(poolId)
+    assert log['interestDue'] == 0
+    assert log['borrowed'] == borrower1b['amount'] - (amount + supply - poolState['interestPaid'])
+    assert poolState['borrowed'] == log['borrowed']
+
+def test_repay_withdraw_supply_unauth(rocketlendp, borrower1b, RPLToken, rocketVaultImpersonated, other, chain):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    node = borrower1b['node']
+    amount = 200_000
+    supply = 400_000
+    grab_RPL(other, supply, RPLToken, rocketVaultImpersonated, rocketlend)
+    chain.pending_timestamp += round(datetime.timedelta(hours=12, days=28).total_seconds())
+    with reverts('auth'):
+        rocketlend.repay(poolId, node, amount, supply, sender=other)
+
+def test_borrow_again(rocketlendp, RPLToken, borrower1b):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    node = borrower1b['node']
+    borrower = borrower1b['borrower']
+    startTime = borrower1b['receipt'].timestamp
+    oneRPL = 10 ** RPLToken.decimals()
+    amount = 19 * oneRPL
+    receipt = rocketlend.borrow(poolId, node, amount, sender=borrower)
+    duration = receipt.timestamp - startTime
+    logs = rocketlend.Borrow.from_receipt(receipt)
+    assert len(logs) == 1
+    log = logs[0]
+    assert log['pool'] == poolId
+    assert log['node'] == node
+    assert log['amount'] == amount
+    assert log['borrowed'] == amount + borrower1b['amount']
+    assert log['interestDue'] == borrower1b['amount'] * rocketlend.params(poolId)['interestRate'] / oneRPL * duration
