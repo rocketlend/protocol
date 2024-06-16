@@ -203,7 +203,6 @@ large enough to be practically unlimited.
 ### Borrower functions
 - `changeBorrowerAddress(_node: address, _newAddress: address, _confirm: bool)`
 - `confirmChangeBorrowerAddress(_node: address)`
-- `confirmWithdrawalAddress(_node: address)`
 - `joinAsBorrower(_node: address)`
 - `leaveAsBorrower(_node: address)`
 - `stakeRPLFor(_node: address, _amount: uint256)`
