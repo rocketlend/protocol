@@ -1,5 +1,5 @@
 #pragma version ~=0.4.0
-#pragma evm-version shanghai
+#pragma evm-version cancun
 #pragma optimize gas
 
 MAX_TOTAL_INTERVALS: constant(uint256) = 2048 # 170+ years
