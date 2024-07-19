@@ -722,8 +722,7 @@ def _borrowLimit(_node: address) -> uint256:
           * oneEther
           * BORROW_LIMIT_PERCENT
           // 100
-          // staticcall self._getRocketNetworkPrices().getRPLPrice()
-          + self.borrowers[_node].RPL)
+          // staticcall self._getRocketNetworkPrices().getRPLPrice())
 
 @internal
 @view
