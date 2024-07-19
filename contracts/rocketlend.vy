@@ -8,6 +8,7 @@ MAX_PROOF_LENGTH: constant(uint256) = 32 # ~ 4 billion claimers
 MAX_NODE_MINIPOOLS: constant(uint256) = 2048
 MAX_FEE_NUMERATOR: constant(uint256) = 250000
 FEE_DENOMINATOR: constant(uint256) = 1000000
+BORROW_LIMIT_PERCENT: constant(uint256) = 30
 
 interface RPLInterface:
   def decimals() -> uint8: view
@@ -719,6 +720,8 @@ def _availableEther(_node: address) -> uint256:
 def _borrowLimit(_node: address) -> uint256:
   return (self._availableEther(_node)
           * oneEther
+          * BORROW_LIMIT_PERCENT
+          // 100
           // staticcall self._getRocketNetworkPrices().getRPLPrice()
           + self.borrowers[_node].RPL)
 
