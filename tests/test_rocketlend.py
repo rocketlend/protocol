@@ -54,10 +54,15 @@ def lender2(accounts):
 
 @pytest.fixture()
 def node1(rocketNodeManager, rocketStorage, accounts):
-    nodeAddress = rocketNodeManager.getNodeAt(42)
+    nodeAddress = rocketNodeManager.getNodeAt(4)
     node = accounts[nodeAddress]
-    if rocketStorage.getNodeWithdrawalAddress(node) == node:
-        rocketStorage.setWithdrawalAddress(node, accounts[0], True, sender=node)
+    if node.balance < 10 ** 18:
+      accounts[3].transfer(nodeAddress, '1 ETH')
+    current_wa = rocketStorage.getNodeWithdrawalAddress(node)
+    if current_wa == node:
+      rocketStorage.setWithdrawalAddress(node, accounts[0], True, sender=node)
+    elif accounts[current_wa].balance < 10 ** 18:
+      accounts[0].transfer(current_wa, '1 ETH')
     return node
 
 @pytest.fixture()
@@ -68,7 +73,10 @@ def node2(rocketNodeManager, accounts):
 @pytest.fixture()
 def node3(rocketNodeManager, accounts):
     nodeAddress = rocketNodeManager.getNodeAt(420)
-    return accounts[nodeAddress]
+    node = accounts[nodeAddress]
+    if node.balance < 10 ** 18:
+      accounts[3].transfer(nodeAddress, '1 ETH')
+    return node
 
 @pytest.fixture()
 def rocketlend(project, rocketStorage, deployer):
