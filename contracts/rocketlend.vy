@@ -1,4 +1,6 @@
-#pragma version ^0.3.0
+#pragma version ~=0.4.0
+#pragma evm-version shanghai
+#pragma optimize gas
 
 MAX_TOTAL_INTERVALS: constant(uint256) = 2048 # 170+ years
 MAX_CLAIM_INTERVALS: constant(uint256) = 128 # ~10 years
@@ -76,50 +78,50 @@ rocketStorage: public(immutable(RocketStorageInterface))
 @view
 def _getRocketNodeStaking() -> RocketNodeStakingInterface:
   return RocketNodeStakingInterface(
-    rocketStorage.getAddress(rocketNodeStakingKey)
+    staticcall rocketStorage.getAddress(rocketNodeStakingKey)
   )
 
 @internal
 @view
 def _getRocketNodeDeposit() -> RocketNodeDepositInterface:
   return RocketNodeDepositInterface(
-    rocketStorage.getAddress(rocketNodeDepositKey)
+    staticcall rocketStorage.getAddress(rocketNodeDepositKey)
   )
 
 @internal
 @view
 def _getRocketNodeManager() -> RocketNodeManagerInterface:
   return RocketNodeManagerInterface(
-    rocketStorage.getAddress(rocketNodeManagerKey)
+    staticcall rocketStorage.getAddress(rocketNodeManagerKey)
   )
 
 @internal
 @view
 def _getMerkleDistributor() -> RocketMerkleDistributorInterface:
   return RocketMerkleDistributorInterface(
-    rocketStorage.getAddress(rocketMerkleDistributorKey)
+    staticcall rocketStorage.getAddress(rocketMerkleDistributorKey)
   )
 
 @internal
 @view
 def _getRewardsPool() -> RocketRewardsPoolInterface:
   return RocketRewardsPoolInterface(
-    rocketStorage.getAddress(rocketRewardsPoolKey)
+    staticcall rocketStorage.getAddress(rocketRewardsPoolKey)
   )
 
 @internal
 @view
 def _getRocketNetworkPrices() -> RocketNetworkPricesInterface:
   return RocketNetworkPricesInterface(
-    rocketStorage.getAddress(rocketNetworkPricesKey)
+    staticcall rocketStorage.getAddress(rocketNetworkPricesKey)
   )
 
 @internal
 @view
 def _getNodeDistributor(_node: address) -> RocketNodeDistributorInterface:
   return RocketNodeDistributorInterface(
-    RocketNodeDistributorFactoryInterface(
-      rocketStorage.getAddress(rocketNodeDistributorFactoryKey)
+    staticcall RocketNodeDistributorFactoryInterface(
+      staticcall rocketStorage.getAddress(rocketNodeDistributorFactoryKey)
     ).getProxyAddress(_node)
   )
 
@@ -175,12 +177,12 @@ intervals: public(HashMap[address, HashMap[uint256, bool]]) # intervals known to
 oneRPL: immutable(uint256)
 oneEther: constant(uint256) = 10 ** 18
 
-@external
+@deploy
 def __init__(_rocketStorage: address):
   rocketStorage = RocketStorageInterface(_rocketStorage)
-  RPL = RPLInterface(rocketStorage.getAddress(keccak256("contract.addressrocketTokenRPL")))
+  RPL = RPLInterface(staticcall rocketStorage.getAddress(keccak256("contract.addressrocketTokenRPL")))
   self.protocol.address = msg.sender
-  oneRPL = 10 ** convert(RPL.decimals(), uint256)
+  oneRPL = 10 ** convert(staticcall RPL.decimals(), uint256)
 
 allowPaymentsFrom: address
 @external
@@ -231,7 +233,7 @@ def setFeeNumerator(_new: uint256):
 @external
 def withdrawFees():
   assert msg.sender == self.protocol.address, "auth"
-  assert RPL.transfer(msg.sender, self.protocol.fees), "t"
+  assert extcall RPL.transfer(msg.sender, self.protocol.fees), "t"
   log WithdrawFees(msg.sender, self.protocol.fees)
   self.protocol.fees = 0
 
@@ -369,7 +371,7 @@ def _checkFromLender(_poolId: bytes32):
 
 @internal
 def _supplyPool(_poolId: bytes32, _amount: uint256):
-  assert RPL.transferFrom(msg.sender, self, _amount), "tf"
+  assert extcall RPL.transferFrom(msg.sender, self, _amount), "tf"
   self.pools[_poolId].available += _amount
   log SupplyPool(_poolId, _amount, self.pools[_poolId].available)
 
@@ -391,7 +393,7 @@ def setAllowance(_poolId: bytes32, _amount: uint256):
 def withdrawFromPool(_poolId: bytes32, _amount: uint256):
   self._checkFromLender(_poolId)
   self.pools[_poolId].available -= _amount
-  assert RPL.transfer(msg.sender, _amount), "t"
+  assert extcall RPL.transfer(msg.sender, _amount), "t"
   log WithdrawFromPool(_poolId, _amount, self.pools[_poolId].available)
 
 @external
@@ -399,7 +401,7 @@ def withdrawInterest(_poolId: bytes32, _amount: uint256, _andSupply: uint256):
   self._checkFromLender(_poolId)
   self.pools[_poolId].interestPaid -= _amount
   if _andSupply < _amount:
-    assert RPL.transfer(msg.sender, _amount - _andSupply), "t"
+    assert extcall RPL.transfer(msg.sender, _amount - _andSupply), "t"
   self.pools[_poolId].available += _andSupply
   log WithdrawInterest(_poolId, _amount, _andSupply, self.pools[_poolId].interestPaid, self.pools[_poolId].available)
 
@@ -423,7 +425,7 @@ def _checkEndedOwing(_poolId: bytes32, _node: address):
 def forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256):
   self._checkEndedOwing(_poolId, _node)
   if 0 < _withdrawAmount:
-    self._getRocketNodeStaking().withdrawRPL(_node, _withdrawAmount)
+    extcall self._getRocketNodeStaking().withdrawRPL(_node, _withdrawAmount)
     self.borrowers[_node].RPL += _withdrawAmount
   available: uint256 = self.borrowers[_node].RPL
   if 0 < _withdrawAmount:
@@ -437,9 +439,9 @@ def forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256):
 def forceRepayETH(_poolId: bytes32, _node: address):
   self._checkFromLender(_poolId)
   self._checkEndedOwing(_poolId, _node)
-  ethPerRpl: uint256 = self._getRocketNetworkPrices().getRPLPrice()
+  ethPerRpl: uint256 = staticcall self._getRocketNetworkPrices().getRPLPrice()
   startAmount: uint256 = self.borrowers[_node].ETH
-  amount: uint256 = startAmount - self._payDebt(_poolId, _node, startAmount / ethPerRpl) * ethPerRpl
+  amount: uint256 = startAmount - self._payDebt(_poolId, _node, startAmount // ethPerRpl) * ethPerRpl
   assert 0 < amount, "none"
   self.borrowers[_node].ETH -= amount
   self.pools[_poolId].reclaimed += amount
@@ -467,8 +469,8 @@ def forceClaimMerkleRewards(
     assert self._payDebt(_poolId, _node, _repayRPL) == 0, "RPL"
     self.borrowers[_node].RPL -= _repayRPL
   if 0 < _repayETH:
-    ethPerRpl: uint256 = self._getRocketNetworkPrices().getRPLPrice()
-    assert self._payDebt(_poolId, _node, _repayETH / ethPerRpl) == 0, "ETH"
+    ethPerRpl: uint256 = staticcall self._getRocketNetworkPrices().getRPLPrice()
+    assert self._payDebt(_poolId, _node, _repayETH // ethPerRpl) == 0, "ETH"
     self.borrowers[_node].ETH -= _repayETH
     self.pools[_poolId].reclaimed += _repayETH
   log ForceClaimRewards(_poolId, _node, totalRPL, totalETH, _repayRPL, _repayETH,
@@ -489,9 +491,9 @@ def forceDistributeRefund(_poolId: bytes32, _node: address,
   total += self._distributeMinipools(_distributeMinipools, _rewardsOnly)
   total += self._refundMinipools(_refundMinipools)
   assert 0 < total, "none"
-  ethPerRpl: uint256 = self._getRocketNetworkPrices().getRPLPrice()
+  ethPerRpl: uint256 = staticcall self._getRocketNetworkPrices().getRPLPrice()
   startAmount: uint256 = self.borrowers[_node].ETH
-  amount: uint256 = startAmount - self._payDebt(_poolId, _node, startAmount / ethPerRpl) * ethPerRpl
+  amount: uint256 = startAmount - self._payDebt(_poolId, _node, startAmount // ethPerRpl) * ethPerRpl
   assert 0 < amount, "none"
   self.borrowers[_node].ETH -= amount
   self.pools[_poolId].reclaimed += amount
@@ -607,28 +609,28 @@ def _updateIndex(_node: address, _toIndex: uint256):
   index: uint256 = self.borrowers[_node].index
   if _toIndex <= index: return
   rocketMerkleDistributor: RocketMerkleDistributorInterface = self._getMerkleDistributor()
-  for _ in range(MAX_TOTAL_INTERVALS):
+  for _: uint256 in range(MAX_TOTAL_INTERVALS):
     if _toIndex <= index: break
-    self.intervals[_node][index] = rocketMerkleDistributor.isClaimed(index, _node)
+    self.intervals[_node][index] = staticcall rocketMerkleDistributor.isClaimed(index, _node)
     index += 1
   self.borrowers[_node].index = index
 
 @external
 def joinAsBorrower(_node: address):
   assert self.borrowers[_node].address == empty(address), "j"
-  assert not rocketStorage.getBool(
+  assert not staticcall rocketStorage.getBool(
     keccak256(concat(b"node.stake.for.allowed",
                      convert(_node, bytes20),
                      convert(self, bytes20)))), "sfa"
-  currentWithdrawalAddress: address = rocketStorage.getNodeWithdrawalAddress(_node)
+  currentWithdrawalAddress: address = staticcall rocketStorage.getNodeWithdrawalAddress(_node)
   if currentWithdrawalAddress == self:
     assert msg.sender == _node, "auth"
     self.borrowers[_node].address = _node
   else:
     self.borrowers[_node].address = currentWithdrawalAddress
-    rocketStorage.confirmWithdrawalAddress(_node)
-  self._getRocketNodeManager().setRPLWithdrawalAddress(_node, self, True)
-  self._updateIndex(_node, self._getRewardsPool().getRewardIndex())
+    extcall rocketStorage.confirmWithdrawalAddress(_node)
+  extcall self._getRocketNodeManager().setRPLWithdrawalAddress(_node, self, True)
+  self._updateIndex(_node, staticcall self._getRewardsPool().getRewardIndex())
   log JoinProtocol(_node)
 
 @external
@@ -636,16 +638,16 @@ def leaveAsBorrower(_node: address):
   assert msg.sender == self.borrowers[_node].address, "auth"
   assert self.borrowers[_node].borrowed == 0, "b"
   assert self.borrowers[_node].interestDue == 0, "i"
-  rocketStorage.setWithdrawalAddress(_node, msg.sender, True)
-  self._getRocketNodeManager().unsetRPLWithdrawalAddress(_node)
+  extcall rocketStorage.setWithdrawalAddress(_node, msg.sender, True)
+  extcall self._getRocketNodeManager().unsetRPLWithdrawalAddress(_node)
   self.borrowers[_node].address = empty(address)
   log LeaveProtocol(_node)
 
 @internal
 def _stakeRPLFor(_node: address, _amount: uint256):
   rocketNodeStaking: RocketNodeStakingInterface = self._getRocketNodeStaking()
-  assert RPL.approve(rocketNodeStaking.address, _amount), "a"
-  rocketNodeStaking.stakeRPLFor(_node, _amount)
+  assert extcall RPL.approve(rocketNodeStaking.address, _amount), "a"
+  extcall rocketNodeStaking.stakeRPLFor(_node, _amount)
 
 @external
 def stakeRPLFor(_node: address, _amount: uint256):
@@ -655,7 +657,7 @@ def stakeRPLFor(_node: address, _amount: uint256):
 @external
 def withdrawRPL(_node: address, _amount: uint256):
   self._checkFromBorrower(_node)
-  self._getRocketNodeStaking().withdrawRPL(_node, _amount)
+  extcall self._getRocketNodeStaking().withdrawRPL(_node, _amount)
   self.borrowers[_node].RPL += _amount
   log WithdrawRPL(_node, _amount, self.borrowers[_node].RPL)
 
@@ -670,7 +672,7 @@ def _outstandingInterest(_poolId: bytes32, _node: address, _endTime: uint256) ->
   return (self.loans[_poolId][_node].borrowed
           * self.params[_poolId].interestRate
           * (_endTime - self.loans[_poolId][_node].startTime)
-          / oneRPL)
+          // oneRPL)
 
 @internal
 def _chargeInterest(_poolId: bytes32, _node: address, _amount: uint256):
@@ -700,7 +702,7 @@ def _repay(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
     self.loans[_poolId][_node].borrowed -= _amount
     self.borrowers[_node].borrowed -= _amount
     self.pools[_poolId].borrowed -= _amount
-    fee: uint256 = self.params[_poolId].protocolFee * _amount / FEE_DENOMINATOR
+    fee: uint256 = self.params[_poolId].protocolFee * _amount // FEE_DENOMINATOR
     self.protocol.fees += fee
     self.pools[_poolId].available += _amount - fee
   return _amount
@@ -708,8 +710,8 @@ def _repay(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
 @internal
 @view
 def _availableEther(_node: address) -> uint256:
-  return (self._getRocketNodeStaking().getNodeETHProvided(_node)
-          + self._getRocketNodeDeposit().getNodeEthBalance(_node)
+  return (staticcall self._getRocketNodeStaking().getNodeETHProvided(_node)
+          + staticcall self._getRocketNodeDeposit().getNodeEthBalance(_node)
           + self.borrowers[_node].ETH)
 
 @internal
@@ -717,7 +719,7 @@ def _availableEther(_node: address) -> uint256:
 def _borrowLimit(_node: address) -> uint256:
   return (self._availableEther(_node)
           * oneEther
-          / self._getRocketNetworkPrices().getRPLPrice()
+          // staticcall self._getRocketNetworkPrices().getRPLPrice()
           + self.borrowers[_node].RPL)
 
 @internal
@@ -751,13 +753,13 @@ def repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: u
   rocketNodeStaking: RocketNodeStakingInterface = self._getRocketNodeStaking()
   available: uint256 = 0
   if self.borrowers[_node].RPL < _amount:
-    rocketNodeStaking.withdrawRPL(_node, _amount - self.borrowers[_node].RPL)
+    extcall rocketNodeStaking.withdrawRPL(_node, _amount - self.borrowers[_node].RPL)
     self.borrowers[_node].RPL = _amount
   if 0 < _amount:
     self.borrowers[_node].RPL -= _amount
     available += _amount
   if 0 < _amountSupplied:
-    assert RPL.transferFrom(msg.sender, self, _amountSupplied), "tf"
+    assert extcall RPL.transferFrom(msg.sender, self, _amountSupplied), "tf"
     available += _amountSupplied
   assert self._payDebt(_poolId, _node, available) == 0, "bal"
   log Repay(_poolId, _node, _amount + _amountSupplied,
@@ -802,7 +804,7 @@ def _claimMerkleRewards(
   maxUnclaimedIndex: uint256 = 0
   totalRPL: uint256 = self.borrowers[_node].RPL
   totalETH: uint256 = self.borrowers[_node].ETH
-  for index in _rewardIndex:
+  for index: uint256 in _rewardIndex:
     self.intervals[_node][index] = True
     if index == self.borrowers[_node].index:
       self.borrowers[_node].index = index + 1
@@ -815,7 +817,7 @@ def _claimMerkleRewards(
   self.borrowers[_node].RPL -= _stakeAmount
   distributor: RocketMerkleDistributorInterface = self._getMerkleDistributor()
   self.allowPaymentsFrom = distributor.address
-  distributor.claimAndStake(_node, _rewardIndex, _amountRPL, _amountETH, _merkleProof, _stakeAmount)
+  extcall distributor.claimAndStake(_node, _rewardIndex, _amountRPL, _amountETH, _merkleProof, _stakeAmount)
   self.allowPaymentsFrom = empty(address)
   self._updateIndex(_node, maxUnclaimedIndex)
   return totalRPL, totalETH
@@ -838,11 +840,11 @@ def claimMerkleRewards(
 @internal
 def _distribute(_node: address) -> uint256:
   distributor: RocketNodeDistributorInterface = self._getNodeDistributor(_node)
-  nodeShare: uint256 = distributor.getNodeShare()
+  nodeShare: uint256 = staticcall distributor.getNodeShare()
   self.borrowers[_node].ETH += nodeShare
   amount: uint256 = self.balance
   self.allowPaymentsFrom = distributor.address
-  distributor.distribute()
+  extcall distributor.distribute()
   self.allowPaymentsFrom = empty(address)
   assert amount + nodeShare == self.balance, "bal"
   return nodeShare
@@ -855,18 +857,18 @@ def distribute(_node: address):
 @internal
 def _distributeMinipools(_minipools: DynArray[address, MAX_NODE_MINIPOOLS], _rewardsOnly: bool) -> uint256:
   balance: uint256 = self.balance
-  for minipool in _minipools:
+  for minipool: address in _minipools:
     self.allowPaymentsFrom = minipool
-    MinipoolInterface(minipool).distributeBalance(_rewardsOnly)
+    extcall MinipoolInterface(minipool).distributeBalance(_rewardsOnly)
   self.allowPaymentsFrom = empty(address)
   return self.balance - balance
 
 @internal
 def _refundMinipools(_minipools: DynArray[address, MAX_NODE_MINIPOOLS]) -> uint256:
   balance: uint256 = self.balance
-  for minipool in _minipools:
+  for minipool: address in _minipools:
     self.allowPaymentsFrom = minipool
-    MinipoolInterface(minipool).refund()
+    extcall MinipoolInterface(minipool).refund()
   self.allowPaymentsFrom = empty(address)
   return self.balance - balance
 
@@ -890,7 +892,7 @@ def withdraw(_node: address, _amountRPL: uint256, _amountETH: uint256):
   self._checkFromBorrower(_node)
   if 0 < _amountRPL:
     self.borrowers[_node].RPL -= _amountRPL
-    assert RPL.transfer(msg.sender, _amountRPL), "t"
+    assert extcall RPL.transfer(msg.sender, _amountRPL), "t"
   assert self._debt(_node) <= self.borrowers[_node].RPL, "debt"
   if 0 < _amountETH:
     self.borrowers[_node].ETH -= _amountETH
