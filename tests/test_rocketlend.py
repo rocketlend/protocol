@@ -428,13 +428,15 @@ def test_repay_partial_supply_other(rocketlendp, RPLToken, rocketVaultImpersonat
     node = borrower1b['node']
     supply = 42 * 10 ** RPLToken.decimals()
     grab_RPL(other, supply, RPLToken, rocketVaultImpersonated, rocketlend)
+    feesBefore = rocketlend.protocol().fees
     receipt = rocketlend.repay(poolId, node, 0, supply, sender=other)
+    feePaid = rocketlend.protocol().fees - feesBefore
     logs = rocketlend.Repay.from_receipt(receipt)
     assert len(logs) == 1
     log = logs[0]
     poolState = rocketlend.pools(poolId)
     assert log['interestDue'] == 0
-    assert log['borrowed'] == borrower1b['amount'] - (supply - poolState['interestPaid'])
+    assert log['borrowed'] == borrower1b['amount'] - (supply - (poolState['interestPaid'] + feePaid))
     assert poolState['borrowed'] == log['borrowed']
 
 def test_repay_withdraw_unauth(rocketlendp, RPLToken, borrower1b, other):
@@ -478,7 +480,9 @@ def test_repay_withdraw_and_supply(rocketlendp, RPLToken, rocketVaultImpersonate
     grab_RPL(borrower, supply, RPLToken, rocketVaultImpersonated, rocketlend)
     stakeBefore = rocketNodeStaking.getNodeRPLStake(node)
     chain.pending_timestamp += round(datetime.timedelta(hours=12, days=28).total_seconds())
+    feesBefore = rocketlend.protocol().fees
     receipt = rocketlend.repay(poolId, node, amount, supply, sender=borrower)
+    feePaid = rocketlend.protocol().fees - feesBefore
     stakeAfter = rocketNodeStaking.getNodeRPLStake(node)
     logs = rocketlend.Repay.from_receipt(receipt)
     assert len(logs) == 1
@@ -486,7 +490,7 @@ def test_repay_withdraw_and_supply(rocketlendp, RPLToken, rocketVaultImpersonate
     assert stakeBefore - stakeAfter == amount
     poolState = rocketlend.pools(poolId)
     assert log['interestDue'] == 0
-    assert log['borrowed'] == borrower1b['amount'] - (amount + supply - poolState['interestPaid'])
+    assert log['borrowed'] == borrower1b['amount'] - (amount + supply - (poolState['interestPaid'] + feePaid))
     assert poolState['borrowed'] == log['borrowed']
 
 def test_repay_withdraw_supply_unauth(rocketlendp, borrower1b, RPLToken, rocketVaultImpersonated, other, chain):

@@ -686,7 +686,9 @@ def _repayInterest(_poolId: bytes32, _node: address, _amount: uint256) -> uint25
   if 0 < _amount:
     self.loans[_poolId][_node].interestDue -= _amount
     self.borrowers[_node].interestDue -= _amount
-    self.pools[_poolId].interestPaid += _amount
+    fee: uint256 = self.params[_poolId].protocolFee * _amount // FEE_DENOMINATOR
+    self.protocol.fees += fee
+    self.pools[_poolId].interestPaid += _amount - fee
   return _amount
 
 @internal
@@ -703,9 +705,7 @@ def _repay(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
     self.loans[_poolId][_node].borrowed -= _amount
     self.borrowers[_node].borrowed -= _amount
     self.pools[_poolId].borrowed -= _amount
-    fee: uint256 = self.params[_poolId].protocolFee * _amount // FEE_DENOMINATOR
-    self.protocol.fees += fee
-    self.pools[_poolId].available += _amount - fee
+    self.pools[_poolId].available += _amount
   return _amount
 
 @internal
