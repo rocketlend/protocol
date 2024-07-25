@@ -56,6 +56,10 @@ Each pool is identified by the following parameters:
 RPL may be supplied to a pool (without changing its parameters) at any time.
 RPL that is not currently borrowed may be withdrawn from the pool at any time.
 
+Lending pools can be restricted to a limited set of borrowers. The set of
+borrowers that are allowed to borrow from a pool can be changed at any time by
+the lender (without changing the parameters that identify the pool).
+
 ### Borrower Actions
 
 Borrowers can use the Rocket Lend contract to:
@@ -101,6 +105,8 @@ Lenders can use the Rocket Lend contract to:
 - Transfer control (ownership of funds) of their lender identifier to a new
   address
 - Create a new lending pool with their chosen parameters
+- Restrict or expand the set of borrowers that are allowed to borrow RPL from
+  one of their lending pools
 - Supply RPL to one of their lending pools - this may also be done by a third
   party on the lender's behalf
 - Set the allowance for transfers of debt into one of their lending pools
@@ -120,15 +126,17 @@ TODO: how RPL slashing might affect a default
 
 ### Constants
 
-These are explicit limits on dynamically sized types (as required by Vyper),
-chosen to be large enough to be practically unlimited.
+Most of these are explicit limits on dynamically sized types (as required by
+Vyper), chosen to be large enough to be practically unlimited.
 
-| Name                | Value   | Note                 |
-|---------------------|---------|----------------------|
-|`MAX_TOTAL_INTERVALS`| 2048    | 170+ years           |
-|`MAX_CLAIM_INTERVALS`| 128     | ~ 10 years           |
-|`MAX_PROOF_LENGTH`   | 32      | ~ 4 billion claimers |
-|`MAX_NODE_MINIPOOLS` | 2048    |                      |
+| Name                  | Value   | Note                 |
+|-----------------------|---------|----------------------|
+|`MAX_TOTAL_INTERVALS`  |    2048 | 170+ years           |
+|`MAX_CLAIM_INTERVALS`  |     128 | ~ 10 years           |
+|`MAX_PROOF_LENGTH`     |      32 | ~ 4 billion claimers |
+|`MAX_NODE_MINIPOOLS`   |    2048 |                      |
+|`MAX_ADDRESS_BATCH`    |    2048 |                      |
+|`BORROW_LIMIT_PERCENT` |      30 |                      |
 
 ### Structs
 
@@ -160,11 +168,11 @@ chosen to be large enough to be practically unlimited.
 
 ### Views
 
-- `protocol() → ProtocolState`: the current protocol state
 - `nextLenderId() → uint256`: the first unassigned lender identifier
 - `params(id: bytes32) → PoolParams`
 - `pools(id: bytes32) → PoolState`
 - `loans(id: bytes32, node: address) → LoanState`
+- `allowedToBorrow(id: bytes32, node: address) → bool`: if the null address is allowed, anyone is
 - `borrowers(node: address) → BorrowerState`
 - `intervals(node: address, index: uint256) → bool`: whether a rewards interval index is known to be claimed
 - `lenderAddress(lender: uint256) → address`
@@ -179,6 +187,7 @@ chosen to be large enough to be practically unlimited.
 - `createPool(_params: PoolParams, _andSupply: uint256, _allowance: uint256) → bytes32`
 - `supplyPool(_poolId: bytes32, _amount: uint256)`
 - `setAllowance(_poolId: bytes32, _amount: uint256)`
+- `setAllowedToBorrow(_poolId: bytes32, _nodes: DynArray[address, MAX_ADDRESS_BATCH], _allowed: bool)`
 - `withdrawFromPool(_poolId: bytes32, _amount: uint256)`
 - `withdrawInterest(_poolId: bytes32, _amount: uint256, _andSupply: uint256)`
 - `withdrawEtherFromPool(_poolId: bytes32, _amount: uint256)`

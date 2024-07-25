@@ -6,6 +6,7 @@ MAX_TOTAL_INTERVALS: constant(uint256) = 2048 # 170+ years
 MAX_CLAIM_INTERVALS: constant(uint256) = 128 # ~10 years
 MAX_PROOF_LENGTH: constant(uint256) = 32 # ~ 4 billion claimers
 MAX_NODE_MINIPOOLS: constant(uint256) = 2048
+MAX_ADDRESS_BATCH: constant(uint256) = 2048
 BORROW_LIMIT_PERCENT: constant(uint256) = 30
 
 interface RPLInterface:
@@ -145,6 +146,8 @@ struct PoolState:
 
 pools: public(HashMap[bytes32, PoolState])
 
+allowedToBorrow: public(HashMap[bytes32, HashMap[address, bool]])
+
 struct LoanState:
   borrowed: uint256 # RPL currently borrowed
   startTime: uint256 # start time for ongoing interest accumulation on borrowed
@@ -203,6 +206,11 @@ event SetAllowance:
   id: indexed(bytes32)
   old: indexed(uint256)
   new: indexed(uint256)
+
+event SetAllowedToBorrow:
+  id: indexed(bytes32)
+  nodes: DynArray[address, MAX_ADDRESS_BATCH]
+  allowed: indexed(bool)
 
 event WithdrawFromPool:
   id: indexed(bytes32)
@@ -294,7 +302,7 @@ def _poolId(_params: PoolParams) -> bytes32:
                   ))
 
 @external
-def createPool(_params: PoolParams, _andSupply: uint256, _allowance: uint256) -> bytes32:
+def createPool(_params: PoolParams, _andSupply: uint256, _allowance: uint256, _borrowers: DynArray[address, MAX_ADDRESS_BATCH]) -> bytes32:
   assert msg.sender == self.lenderAddress[_params.lender], "auth"
   poolId: bytes32 = self._poolId(_params)
   self.params[poolId] = _params
@@ -303,6 +311,9 @@ def createPool(_params: PoolParams, _andSupply: uint256, _allowance: uint256) ->
     self._supplyPool(poolId, _andSupply)
   if 0 < _allowance:
     self._setAllowance(poolId, _allowance)
+  for node: address in _borrowers:
+    self.allowedToBorrow[poolId][node] = True
+  log SetAllowedToBorrow(poolId, _borrowers, True)
   return poolId
 
 @internal
@@ -328,6 +339,15 @@ def _setAllowance(_poolId: bytes32, _amount: uint256):
 def setAllowance(_poolId: bytes32, _amount: uint256):
   self._checkFromLender(_poolId)
   self._setAllowance(_poolId, _amount)
+
+@external
+def setAllowedToBorrow(_poolId: bytes32, _nodes: DynArray[address, MAX_ADDRESS_BATCH], _allowed: bool):
+  self._checkFromLender(_poolId)
+  if _allowed:
+    self.allowedToBorrow[_poolId][empty(address)] = False
+  for node: address in _nodes:
+    self.allowedToBorrow[_poolId][node] = _allowed
+  log SetAllowedToBorrow(_poolId, _nodes, _allowed)
 
 @external
 def withdrawFromPool(_poolId: bytes32, _amount: uint256):
@@ -631,6 +651,8 @@ def _repayInterest(_poolId: bytes32, _node: address, _amount: uint256) -> uint25
 @internal
 def _lend(_poolId: bytes32, _node: address, _amount: uint256):
   if 0 < _amount:
+    assert (self.allowedToBorrow[_poolId][empty(address)] or
+            self.allowedToBorrow[_poolId][_node]), "r"
     self.loans[_poolId][_node].borrowed += _amount
     self.borrowers[_node].borrowed += _amount
     self.pools[_poolId].available -= _amount
