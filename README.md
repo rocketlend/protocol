@@ -41,6 +41,8 @@ The interest rate is specified by the lender up front. It is charged on RPL
 that is actually borrowed, for the time during the loan term that it is
 borrowed.
 
+==TODO: the protocol fee has been removed, but this document is not yet updated==
+
 The lender also expects to eventually be repaid the RPL provided to the
 protocol, minus a protocol fee taken by the protocol itself, assessed as a flat
 percentage of any RPL that was actually borrowed and repaid.

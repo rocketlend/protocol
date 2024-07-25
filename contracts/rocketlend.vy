@@ -6,8 +6,6 @@ MAX_TOTAL_INTERVALS: constant(uint256) = 2048 # 170+ years
 MAX_CLAIM_INTERVALS: constant(uint256) = 128 # ~10 years
 MAX_PROOF_LENGTH: constant(uint256) = 32 # ~ 4 billion claimers
 MAX_NODE_MINIPOOLS: constant(uint256) = 2048
-MAX_FEE_NUMERATOR: constant(uint256) = 250000
-FEE_DENOMINATOR: constant(uint256) = 1000000
 BORROW_LIMIT_PERCENT: constant(uint256) = 30
 
 interface RPLInterface:
@@ -126,14 +124,6 @@ def _getNodeDistributor(_node: address) -> RocketNodeDistributorInterface:
     ).getProxyAddress(_node)
   )
 
-struct ProtocolState:
-  fees: uint256 # RPL owed to the protocol (not yet claimed)
-  feeNumerator: uint256 # current protocol fee rate for new pools
-  address: address
-  pending: address
-
-protocol: public(ProtocolState)
-
 nextLenderId: public(uint256)
 
 lenderAddress: public(HashMap[uint256, address])
@@ -143,7 +133,6 @@ struct PoolParams:
   lender: uint256
   interestRate: uint256 # attoRPL per RPL borrowed per second (before loan end time)
   endTime: uint256 # seconds after Unix epoch
-  protocolFee: uint256 # numerator for protocol fee
 
 params: public(HashMap[bytes32, PoolParams])
 
@@ -182,7 +171,6 @@ oneEther: constant(uint256) = 10 ** 18
 def __init__(_rocketStorage: address):
   rocketStorage = RocketStorageInterface(_rocketStorage)
   RPL = RPLInterface(staticcall rocketStorage.getAddress(keccak256("contract.addressrocketTokenRPL")))
-  self.protocol.address = msg.sender
   oneRPL = 10 ** convert(staticcall RPL.decimals(), uint256)
 
 allowPaymentsFrom: address
@@ -190,53 +178,6 @@ allowPaymentsFrom: address
 @payable
 def __default__():
   assert msg.sender == self.allowPaymentsFrom, "auth"
-
-# Protocol actions
-
-event UpdateAdmin:
-  old: indexed(address)
-  new: indexed(address)
-
-event SetFeeNumerator:
-  old: indexed(uint256)
-  new: indexed(uint256)
-
-event WithdrawFees:
-  recipient: indexed(address)
-  amount: indexed(uint256)
-
-@internal
-def _updateAdminAddress(_newAddress: address):
-  self.protocol.pending = empty(address)
-  log UpdateAdmin(self.protocol.address, _newAddress)
-  self.protocol.address = _newAddress
-
-@external
-def changeAdminAddress(_newAddress: address, _confirm: bool):
-  assert msg.sender == self.protocol.address, "auth"
-  if _confirm:
-    self._updateAdminAddress(_newAddress)
-  else:
-    self.protocol.pending = _newAddress
-
-@external
-def confirmChangeAdminAddress():
-  assert msg.sender == self.protocol.pending, "auth"
-  self._updateAdminAddress(msg.sender)
-
-@external
-def setFeeNumerator(_new: uint256):
-  assert msg.sender == self.protocol.address, "auth"
-  assert _new <= MAX_FEE_NUMERATOR, "max"
-  log SetFeeNumerator(self.protocol.feeNumerator, _new)
-  self.protocol.feeNumerator = _new
-
-@external
-def withdrawFees():
-  assert msg.sender == self.protocol.address, "auth"
-  assert extcall RPL.transfer(msg.sender, self.protocol.fees), "t"
-  log WithdrawFees(msg.sender, self.protocol.fees)
-  self.protocol.fees = 0
 
 # Lender actions
 
@@ -349,14 +290,12 @@ def _poolId(_params: PoolParams) -> bytes32:
   return keccak256(concat(
                      convert(_params.lender, bytes32),
                      convert(_params.interestRate, bytes32),
-                     convert(_params.endTime, bytes32),
-                     convert(_params.protocolFee, bytes32)
+                     convert(_params.endTime, bytes32)
                   ))
 
 @external
 def createPool(_params: PoolParams, _andSupply: uint256, _allowance: uint256) -> bytes32:
   assert msg.sender == self.lenderAddress[_params.lender], "auth"
-  assert _params.protocolFee == self.protocol.feeNumerator, "fee"
   poolId: bytes32 = self._poolId(_params)
   self.params[poolId] = _params
   log CreatePool(poolId, _params)
@@ -686,9 +625,7 @@ def _repayInterest(_poolId: bytes32, _node: address, _amount: uint256) -> uint25
   if 0 < _amount:
     self.loans[_poolId][_node].interestDue -= _amount
     self.borrowers[_node].interestDue -= _amount
-    fee: uint256 = self.params[_poolId].protocolFee * _amount // FEE_DENOMINATOR
-    self.protocol.fees += fee
-    self.pools[_poolId].interestPaid += _amount - fee
+    self.pools[_poolId].interestPaid += _amount
   return _amount
 
 @internal

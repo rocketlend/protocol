@@ -88,83 +88,35 @@ def test_RPL_token_address(rocketlend, RPLToken):
 def test_rocketstorage_address(rocketlend, rocketStorage):
     assert rocketlend.rocketStorage() == rocketStorage.address
 
-def test_admin_initial_address(rocketlend, deployer):
-    assert rocketlend.protocol().address == deployer
-
-def test_other_change_address(rocketlend, other):
+def test_create_pool_unregistered(rocketlend, other):
     with reverts('revert: auth'):
-        rocketlend.changeAdminAddress(other, True, sender=other)
-    with reverts('revert: auth'):
-        rocketlend.changeAdminAddress(other, False, sender=other)
+        rocketlend.createPool(dict(lender=0, interestRate=0, endTime=0), 0, 0, sender=other)
 
-@pytest.fixture()
-def rocketlendAdmin(rocketlend, deployer, admin):
-    rocketlend.changeAdminAddress(admin, False, sender=deployer)
-    rocketlend.confirmChangeAdminAddress(sender=admin)
-    return rocketlend
-
-def test_admin_change_address(rocketlendAdmin, admin):
-    assert rocketlendAdmin.protocol().address == admin
-
-def test_admin_change_address_event(rocketlend, deployer, admin):
-    r1 = rocketlend.changeAdminAddress(admin, False, sender=deployer)
-    assert len(rocketlend.UpdateAdmin.from_receipt(r1)) == 0
-    r2 = rocketlend.confirmChangeAdminAddress(sender=admin)
-    logs = rocketlend.UpdateAdmin.from_receipt(r2)
-    assert len(logs) == 1
-    assert logs[0]['old'] == deployer
-    assert logs[0]['new'] == admin
-
-def test_admin_change_address_noconfirm(rocketlend, deployer, admin):
-    rocketlend.changeAdminAddress(admin, True, sender=deployer)
-    assert rocketlend.protocol().address == admin
-
-def test_other_withdraw_fees(rocketlendAdmin, other):
-    with reverts('revert: auth'):
-        rocketlendAdmin.withdrawFees(sender=other)
-
-def test_admin_withdraw_no_fees(rocketlendAdmin, admin, RPLToken):
-    receipt = rocketlendAdmin.withdrawFees(sender=admin)
-    transfers = RPLToken.Transfer.from_receipt(receipt)
-    assert len(transfers) == 1
-    assert transfers[0]['from'] == rocketlendAdmin
-    assert transfers[0]['to'] == admin
-    assert transfers[0]['value'] == 0
-
-def test_create_pool_unregistered(rocketlendAdmin, other):
-    with reverts('revert: auth'):
-        rocketlendAdmin.createPool(dict(lender=0, interestRate=0, endTime=0, protocolFee=0), 0, 0, sender=other)
-
-def test_register_lender1(rocketlendAdmin, lender1):
-    nextId = rocketlendAdmin.nextLenderId()
+def test_register_lender1(rocketlend, lender1):
+    nextId = rocketlend.nextLenderId()
     assert nextId == 0
-    receipt = rocketlendAdmin.registerLender(sender=lender1)
+    receipt = rocketlend.registerLender(sender=lender1)
     assert receipt.return_value == nextId
-    logs = rocketlendAdmin.RegisterLender.from_receipt(receipt)
+    logs = rocketlend.RegisterLender.from_receipt(receipt)
     assert len(logs) == 1
     assert logs[0]['id'] == nextId
     assert logs[0]['address'] == lender1
 
-def test_change_borrower_other(rocketlendAdmin, node1, other):
+def test_change_borrower_other(rocketlend, node1, other):
     with reverts('revert: auth'):
-        rocketlendAdmin.changeBorrowerAddress(node1, other, True, sender=other)
+        rocketlend.changeBorrowerAddress(node1, other, True, sender=other)
 
 @pytest.fixture()
-def rocketlendReg1(rocketlendAdmin, lender1):
-    rocketlendAdmin.registerLender(sender=lender1)
-    return rocketlendAdmin
+def rocketlendReg1(rocketlend, lender1):
+    rocketlend.registerLender(sender=lender1)
+    return rocketlend
 
 def test_create_expired_pool(rocketlendReg1, lender1):
-    params = dict(lender=0, interestRate=0, endTime=0, protocolFee=0)
+    params = dict(lender=0, interestRate=0, endTime=0)
     receipt = rocketlendReg1.createPool(params, 0, 0, sender=lender1)
     logs = rocketlendReg1.CreatePool.from_receipt(receipt)
     assert len(logs) == 1
     assert logs[0]['params'] == list(params.values())
-
-def test_create_pool_wrong_fee(rocketlendReg1, lender1):
-    with reverts('revert: fee'):
-        params = dict(lender=0, interestRate=0, endTime=0, protocolFee=1)
-        rocketlendReg1.createPool(params, 0, 0, sender=lender1)
 
 @pytest.fixture()
 def rocketlendReg2(rocketlendReg1, lender2):
@@ -172,28 +124,15 @@ def rocketlendReg2(rocketlendReg1, lender2):
     return rocketlendReg1
 
 @pytest.fixture()
-def rocketlendbl(rocketlendReg2, node3):
+def rocketlendf(rocketlendReg2, node3):
     rocketlendReg2.registerLender(sender=node3)
     return rocketlendReg2
-
-def test_set_fee_other(rocketlendbl, other):
-    with reverts('revert: auth'):
-        rocketlendbl.setFeeNumerator(100, sender=other)
-
-def test_set_fee_too_high(rocketlendbl, admin):
-    with reverts('revert: max'):
-        rocketlendbl.setFeeNumerator(300000, sender=admin)
-
-@pytest.fixture()
-def rocketlendf(rocketlendbl, admin):
-    rocketlendbl.setFeeNumerator(10000, sender=admin)
-    return rocketlendbl
 
 def time_from_now(**kwargs):
     return round(time.time() + datetime.timedelta(**kwargs).total_seconds())
 
 def test_create_pool(rocketlendf, lender2):
-    params = dict(lender=1, interestRate=100, endTime=time_from_now(days=3), protocolFee=10000)
+    params = dict(lender=1, interestRate=100, endTime=time_from_now(days=3))
     receipt = rocketlendf.createPool(params, 0, 0, sender=lender2)
     logs = rocketlendf.CreatePool.from_receipt(receipt)
     assert len(logs) == 1
@@ -206,7 +145,7 @@ def grab_RPL(who, amount, RPLToken, rocketVaultImpersonated, rocketlend):
 def test_create_pool_with_supply(rocketlendf, RPLToken, rocketVaultImpersonated, lender2):
     amount = 20 * 10 ** RPLToken.decimals()
     grab_RPL(lender2, amount, RPLToken, rocketVaultImpersonated, rocketlendf)
-    params = dict(lender=1, interestRate=100, endTime=time_from_now(days=3), protocolFee=10000)
+    params = dict(lender=1, interestRate=100, endTime=time_from_now(days=3))
     receipt = rocketlendf.createPool(params, amount, 0, sender=lender2)
     logs = rocketlendf.CreatePool.from_receipt(receipt)
     assert len(logs) == 1
@@ -216,7 +155,7 @@ def rocketlendp(rocketlendf, RPLToken, rocketVaultImpersonated, lender2):
     amount = 200 * 10 ** RPLToken.decimals()
     grab_RPL(lender2, amount, RPLToken, rocketVaultImpersonated, rocketlendf)
     endTime=time_from_now(weeks=2)
-    params = dict(lender=1, interestRate=100_000, endTime=endTime, protocolFee=10000)
+    params = dict(lender=1, interestRate=100_000, endTime=endTime)
     receipt = rocketlendf.createPool(params, amount, 0, sender=lender2)
     poolId = rocketlendf.CreatePool.from_receipt(receipt)[0].id
     return dict(receipt=receipt, lenderId=1, lender=lender2, rocketlend=rocketlendf, poolId=poolId, endTime=endTime)
@@ -428,15 +367,13 @@ def test_repay_partial_supply_other(rocketlendp, RPLToken, rocketVaultImpersonat
     node = borrower1b['node']
     supply = 42 * 10 ** RPLToken.decimals()
     grab_RPL(other, supply, RPLToken, rocketVaultImpersonated, rocketlend)
-    feesBefore = rocketlend.protocol().fees
     receipt = rocketlend.repay(poolId, node, 0, supply, sender=other)
-    feePaid = rocketlend.protocol().fees - feesBefore
     logs = rocketlend.Repay.from_receipt(receipt)
     assert len(logs) == 1
     log = logs[0]
     poolState = rocketlend.pools(poolId)
     assert log['interestDue'] == 0
-    assert log['borrowed'] == borrower1b['amount'] - (supply - (poolState['interestPaid'] + feePaid))
+    assert log['borrowed'] == borrower1b['amount'] - (supply - (poolState['interestPaid']))
     assert poolState['borrowed'] == log['borrowed']
 
 def test_repay_withdraw_unauth(rocketlendp, RPLToken, borrower1b, other):
@@ -480,9 +417,7 @@ def test_repay_withdraw_and_supply(rocketlendp, RPLToken, rocketVaultImpersonate
     grab_RPL(borrower, supply, RPLToken, rocketVaultImpersonated, rocketlend)
     stakeBefore = rocketNodeStaking.getNodeRPLStake(node)
     chain.pending_timestamp += round(datetime.timedelta(hours=12, days=28).total_seconds())
-    feesBefore = rocketlend.protocol().fees
     receipt = rocketlend.repay(poolId, node, amount, supply, sender=borrower)
-    feePaid = rocketlend.protocol().fees - feesBefore
     stakeAfter = rocketNodeStaking.getNodeRPLStake(node)
     logs = rocketlend.Repay.from_receipt(receipt)
     assert len(logs) == 1
@@ -490,7 +425,7 @@ def test_repay_withdraw_and_supply(rocketlendp, RPLToken, rocketVaultImpersonate
     assert stakeBefore - stakeAfter == amount
     poolState = rocketlend.pools(poolId)
     assert log['interestDue'] == 0
-    assert log['borrowed'] == borrower1b['amount'] - (amount + supply - (poolState['interestPaid'] + feePaid))
+    assert log['borrowed'] == borrower1b['amount'] - (amount + supply - (poolState['interestPaid']))
     assert poolState['borrowed'] == log['borrowed']
 
 def test_repay_withdraw_supply_unauth(rocketlendp, borrower1b, RPLToken, rocketVaultImpersonated, other, chain):
