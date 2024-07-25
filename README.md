@@ -11,9 +11,10 @@ node's staked assets (ETH and RPL).
 
 ## Technical Design
 
-Rocketlend consists of a single smart contract ("the (Rocketlend) contract"),
-used for all interaction with the protocol and designed to be the primary and
-RPL withdrawal address for Rocket Pool nodes that borrow RPL from the protocol.
+Rocketlend consists of a single immutable smart contract ("the (Rocketlend)
+contract"), used for all interaction with the protocol and designed to be the
+primary and RPL withdrawal address for Rocket Pool nodes that borrow RPL from
+the protocol.
 
 The protocol participants come in two types: "lenders", who supply RPL to the
 protocol, and "borrowers" who borrow RPL from the protocol to stake on Rocket
@@ -30,22 +31,18 @@ ultimately sent.
 ### Lending Pools
 
 The contract manages pools of RPL that are made available by lenders to be used
-by borrowers. There may be many pools active at once.
+by borrowers. There may be many pools active at once. Each lender may have any
+number of pools.
 
 Although each pool has a single lender, the relationship between borrowers and
 pools is many to many. A given pool may lend RPL to many borrowers, and a given
 borrower may borrow RPL from many pools.
 
 In return for providing RPL to be staked, lenders expect to receive interest.
-The interest rate is specified by the lender up front. It is charged on RPL
-that is actually borrowed, for the time during the loan term that it is
-borrowed.
-
-==TODO: the protocol fee has been removed, but this document is not yet updated==
-
-The lender also expects to eventually be repaid the RPL provided to the
-protocol, minus a protocol fee taken by the protocol itself, assessed as a flat
-percentage of any RPL that was actually borrowed and repaid.
+The interest rate is specified by the lender when the pool is created. It is
+charged on RPL that is actually borrowed, for the time during the loan term
+that it is borrowed. The lender also expects to eventually be repaid the RPL
+they supplied to a lending pool.
 
 Each pool is identified by the following parameters:
 - Lender: the identifier for the lender, who receives repaid RPL and interest.
@@ -55,12 +52,9 @@ Each pool is identified by the following parameters:
   Before this time, interest is charged on borrowed RPL. After this time, any
   outstanding debt (including interest) can be seized by the lender from any of
   the borrower's RPL or ETH as it is withdrawn.
-- Protocol fee: the percentage of any repaid RPL that is taken as protocol fee.
-  This is fixed for a pool when the pool is created.
 
 RPL may be supplied to a pool (without changing its parameters) at any time.
-RPL that is not currently borrowed may be withdrawn from the pool at any time
-(without fee).
+RPL that is not currently borrowed may be withdrawn from the pool at any time.
 
 ### Borrower Actions
 
@@ -84,19 +78,20 @@ Borrowers can use the Rocketlend contract to:
 
 #### Borrow Limit
 
-The total amount borrowed at any time by a borrower is limited by the ETH and
-RPL the protocol can determine is available for repayment. This reduces the
-incentive for a node operator to lock up borrowed RPL with no intention of ever
-using it.
+The total amount borrowed by a borrower is limited by the ETH staked on their
+node. This reduces the incentive for a node operator to lock up borrowed RPL
+with no intention of ever using it.
 
-The borrow limit is the value of the following: ETH bonded to currently active
-minipools, ETH supplied (via stake on behalf) for creating new minipools, and
-any RPL and ETH held in Rocketlend (e.g. after being claimed or withdrawn from
-Rocket Pool). It is denominated in RPL using the current RPL price from Rocket
-Pool.
+The borrow limit is 30% of the value of the following: ETH bonded to currently
+active minipools plus ETH supplied (via stake on behalf) for creating new
+minipools. It is denominated in RPL using the RPL price from Rocket Pool at the
+time RPL is being borrowed.
 
-Rewards are not included, so if a borrower reaches their borrow limit, they
-should claim rewards to be able to borrow more.
+Rewards and withdrawn funds are not included, so if a borrower reaches their
+borrow limit they should claim and restake these funds to be able to borrow
+more.
+
+TODO: discuss motivation for borrow limit and choice of percentage
 
 ### Lender Actions
 
@@ -125,14 +120,11 @@ TODO: how RPL slashing might affect a default
 
 ### Constants
 
-The first two constants below concern the protocol fee. The last four are
-explicit limits on dynamically sized types (as required by Vyper), chosen to be
-large enough to be practically unlimited.
+These are explicit limits on dynamically sized types (as required by Vyper),
+chosen to be large enough to be practically unlimited.
 
 | Name                | Value   | Note                 |
 |---------------------|---------|----------------------|
-|`FEE_DENOMINATOR`    | 1000000 | 6 decimal places     |
-|`MAX_FEE_NUMERATOR`  | 100000  | 10%                  |
 |`MAX_TOTAL_INTERVALS`| 2048    | 170+ years           |
 |`MAX_CLAIM_INTERVALS`| 128     | ~ 10 years           |
 |`MAX_PROOF_LENGTH`   | 32      | ~ 4 billion claimers |
@@ -140,17 +132,10 @@ large enough to be practically unlimited.
 
 ### Structs
 
-- `ProtocolState`
-  - `fees`: unclaimed RPL owed to the protocol
-  - `feeNumerator`: current protocol fee for new pools
-  - `address`: admin (that can claim protocol fees and change the rate)
-  - `pending`: pending address used when changing the admin address
-
 - `PoolParams` (per pool id)
   - `lender`: identifier (non-negative integer) of the pool owner
   - `interestRate`: attoRPL (i.e. RPL wei) per RPL borrowed per second (before the loan end time)
   - `endTime`: seconds after the Unix epoch when the loan ends
-  - `protocolFee`: protocol fee numerator as locked in at pool creation
 
 - `PoolState` (per pool id)
   - `available`: amount of RPL available to be borrowed or returned to the lender
@@ -218,23 +203,11 @@ large enough to be practically unlimited.
 - `refundMinipools(_node: address, _minipools: DynArray[address, MAX_NODE_MINIPOOLS])`
 - `withdraw(_node: address, _amountRPL: uint256, _amountETH: uint256)`
 
-### Admin functions
-- `changeAdminAddress(_newAddress: address, _confirm: bool)`
-- `confirmChangeAdminAddress()`
-- `setFeeNumerator(_new: uint256)`
-- `withdrawFees()`
-
 ### Events
 
 - `UpdateAdmin`
     - `old: address`
     - `new: address`
-- `SetFeeNumerator`
-    - `old: uint256`
-    - `new: uint256`
-- `WithdrawFees`
-    - `recipient: address`
-    - `amount: uint256`
 - `RegisterLender`
     - `id: uint256`
     - `address: address`
