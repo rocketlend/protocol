@@ -184,10 +184,10 @@ Vyper), chosen to be large enough to be practically unlimited.
 - `registerLender() → uint256`
 - `changeLenderAddress(_lender: uint256, _newAddress: address, _confirm: bool)`
 - `confirmChangeLenderAddress(_lender: uint256)`
-- `createPool(_params: PoolParams, _andSupply: uint256, _allowance: uint256) → bytes32`
+- `createPool(_params: PoolParams, _andSupply: uint256, _allowance: uint256, _borrowers: DynArray[address, MAX_ADDRESS_BATCH]) → bytes32`
 - `supplyPool(_poolId: bytes32, _amount: uint256)`
 - `setAllowance(_poolId: bytes32, _amount: uint256)`
-- `setAllowedToBorrow(_poolId: bytes32, _nodes: DynArray[address, MAX_ADDRESS_BATCH], _allowed: bool)`
+- `changeAllowedToBorrow(_poolId: bytes32, _allowed: bool, _nodes: DynArray[address, MAX_ADDRESS_BATCH])`
 - `withdrawFromPool(_poolId: bytes32, _amount: uint256)`
 - `withdrawInterest(_poolId: bytes32, _amount: uint256, _andSupply: uint256)`
 - `withdrawEtherFromPool(_poolId: bytes32, _amount: uint256)`
@@ -214,58 +214,59 @@ Vyper), chosen to be large enough to be practically unlimited.
 
 ### Events
 
-- `UpdateAdmin`
-    - `old: address`
-    - `new: address`
 - `RegisterLender`
-    - `id: uint256`
-    - `address: address`
+    - `id: indexed(uint256)`
+    - `address: indexed(address)`
 - `UpdateLender`
-    - `id: uint256`
-    - `old: address`
-    - `new: address`
+    - `id: indexed(uint256)`
+    - `old: indexed(address)`
+    - `new: indexed(address)`
 - `CreatePool`
-    - `id: bytes32`
+    - `id: indexed(bytes32)`
     - `params: PoolParams`
 - `SupplyPool`
-    - `id: bytes32`
-    - `amount: uint256`
-    - `total: uint256`
+    - `id: indexed(bytes32)`
+    - `amount: indexed(uint256)`
+    - `total: indexed(uint256)`
 - `SetAllowance`
-    - `id: bytes32`
-    - `old: uint256`
-    - `new: uint256`
+    - `id: indexed(bytes32)`
+    - `old: indexed(uint256)`
+    - `new: indexed(uint256)`
+- `ChangeAllowedToBorrow`
+    - `id: indexed(bytes32)`
+    - `allowed: indexed(bool)`
+    - `nodes: DynArray[address, MAX_ADDRESS_BATCH]`
 - `WithdrawFromPool`
-    - `id: bytes32`
-    - `amount: uint256`
-    - `total: uint256`
+    - `id: indexed(bytes32)`
+    - `amount: indexed(uint256)`
+    - `total: indexed(uint256)`
 - `WithdrawInterest`
-    - `id: bytes32`
-    - `amount: uint256`
-    - `supplied: uint256`
+    - `id: indexed(bytes32)`
+    - `amount: indexed(uint256)`
+    - `supplied: indexed(uint256)`
     - `interestPaid: uint256`
     - `available: uint256`
 - `WithdrawEtherFromPool`
-    - `id: bytes32`
-    - `amount: uint256`
-    - `total: uint256`
+    - `id: indexed(bytes32)`
+    - `amount: indexed(uint256)`
+    - `total: indexed(uint256)`
 - `ForceRepayRPL`
-    - `id: bytes32`
-    - `node: address`
-    - `withdrawn: uint256`
+    - `id: indexed(bytes32)`
+    - `node: indexed(address)`
+    - `withdrawn: indexed(uint256)`
     - `available: uint256`
     - `borrowed: uint256`
     - `interestDue: uint256`
 - `ForceRepayETH`
-    - `id: bytes32`
-    - `node: address`
-    - `amount: uint256`
+    - `id: indexed(bytes32)`
+    - `node: indexed(address)`
+    - `amount: indexed(uint256)`
     - `available: uint256`
     - `borrowed: uint256`
     - `interestDue: uint256`
 - `ForceClaimRewards`
-    - `id: bytes32`
-    - `node: address`
+    - `id: indexed(bytes32)`
+    - `node: indexed(address)`
     - `claimedRPL: uint256`
     - `claimedETH: uint256`
     - `repaidRPL: uint256`
@@ -275,67 +276,67 @@ Vyper), chosen to be large enough to be practically unlimited.
     - `borrowed: uint256`
     - `interestDue: uint256`
 - `ForceDistributeRefund`
-    - `id: bytes32`
-    - `node: address`
+    - `id: indexed(bytes32)`
+    - `node: indexed(address)`
     - `claimed: uint256`
     - `repaid: uint256`
     - `available: uint256`
     - `borrowed: uint256`
     - `interestDue: uint256`
 - `UpdateBorrower`
-    - `node: address`
-    - `old: address`
-    - `new: address`
+    - `node: indexed(address)`
+    - `old: indexed(address)`
+    - `new: indexed(address)`
 - `JoinProtocol`
-    - `node: address`
+    - `node: indexed(address)`
 - `LeaveProtocol`
-    - `node: address`
+    - `node: indexed(address)`
 - `WithdrawRPL`
-    - `node: address`
-    - `amount: uint256`
-    - `total: uint256`
+    - `node: indexed(address)`
+    - `amount: indexed(uint256)`
+    - `total: indexed(uint256)`
 - `Borrow`
-    - `pool: bytes32`
-    - `node: address`
-    - `amount: uint256`
+    - `pool: indexed(bytes32)`
+    - `node: indexed(address)`
+    - `amount: indexed(uint256)`
     - `borrowed: uint256`
     - `interestDue: uint256`
 - `Repay`
-    - `pool: bytes32`
-    - `node: address`
-    - `amount: uint256`
+    - `pool: indexed(bytes32)`
+    - `node: indexed(address)`
+    - `amount: indexed(uint256)`
     - `borrowed: uint256`
     - `interestDue: uint256`
 - `TransferDebt`
-    - `node: address`
-    - `fromPool: bytes32`
-    - `toPool: bytes32`
+    - `node: indexed(address)`
+    - `fromPool: indexed(bytes32)`
+    - `toPool: indexed(bytes32)`
     - `amount: uint256`
     - `interestDue: uint256`
     - `allowance: uint256`
 - `Distribute`
-    - `node: address`
-    - `amount: uint256`
+    - `node: indexed(address)`
+    - `amount: indexed(uint256)`
 - `DistributeMinipools`
-    - `node: address`
-    - `amount: uint256`
-    - `total: uint256`
+    - `node: indexed(address)`
+    - `amount: indexed(uint256)`
+    - `total: indexed(uint256)`
 - `RefundMinipools`
-    - `node: address`
-    - `amount: uint256`
-    - `total: uint256`
+    - `node: indexed(address)`
+    - `amount: indexed(uint256)`
+    - `total: indexed(uint256)`
 - `ClaimRewards`
-    - `node: address`
-    - `claimedRPL: uint256`
-    - `claimedETH: uint256`
+    - `node: indexed(address)`
+    - `claimedRPL: indexed(uint256)`
+    - `claimedETH: indexed(uint256)`
     - `stakedRPL: uint256`
     - `totalRPL: uint256`
     - `totalETH: uint256`
     - `index: uint256`
 - `Withdraw`
-    - `node: address`
-    - `amountRPL: uint256`
-    - `amountETH: uint256`
+    - `node: indexed(address)`
+    - `amountRPL: indexed(uint256)`
+    - `amountETH: indexed(uint256)`
     - `totalRPL: uint256`
     - `totalETH: uint256`
 

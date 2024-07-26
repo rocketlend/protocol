@@ -207,10 +207,10 @@ event SetAllowance:
   old: indexed(uint256)
   new: indexed(uint256)
 
-event SetAllowedToBorrow:
+event ChangeAllowedToBorrow:
   id: indexed(bytes32)
-  nodes: DynArray[address, MAX_ADDRESS_BATCH]
   allowed: indexed(bool)
+  nodes: DynArray[address, MAX_ADDRESS_BATCH]
 
 event WithdrawFromPool:
   id: indexed(bytes32)
@@ -313,7 +313,7 @@ def createPool(_params: PoolParams, _andSupply: uint256, _allowance: uint256, _b
     self._setAllowance(poolId, _allowance)
   for node: address in _borrowers:
     self.allowedToBorrow[poolId][node] = True
-  log SetAllowedToBorrow(poolId, _borrowers, True)
+  log ChangeAllowedToBorrow(poolId, True, _borrowers)
   return poolId
 
 @internal
@@ -341,13 +341,13 @@ def setAllowance(_poolId: bytes32, _amount: uint256):
   self._setAllowance(_poolId, _amount)
 
 @external
-def setAllowedToBorrow(_poolId: bytes32, _nodes: DynArray[address, MAX_ADDRESS_BATCH], _allowed: bool):
+def changeAllowedToBorrow(_poolId: bytes32, _allowed: bool, _nodes: DynArray[address, MAX_ADDRESS_BATCH]):
   self._checkFromLender(_poolId)
   if _allowed:
     self.allowedToBorrow[_poolId][empty(address)] = False
   for node: address in _nodes:
     self.allowedToBorrow[_poolId][node] = _allowed
-  log SetAllowedToBorrow(_poolId, _nodes, _allowed)
+  log ChangeAllowedToBorrow(_poolId, _allowed, _nodes)
 
 @external
 def withdrawFromPool(_poolId: bytes32, _amount: uint256):
