@@ -47,7 +47,8 @@ they supplied to a lending pool.
 Each pool is identified by the following parameters:
 - Lender: the identifier for the lender, who receives repaid RPL and interest.
 - Interest rate: the number of attoRPL per second per RPL that has been
-  borrowed and not yet repaid, charged as interest to the borrower.
+  borrowed and not yet repaid, charged as interest to the borrower. Interest is
+  charged on the borrowed amount, i.e., without compounding.
 - End time: the time by which the lender wishes the pool's RPL to be repaid.
   Before this time, interest is charged on borrowed RPL. After this time, any
   outstanding debt (including interest) can be seized by the lender from any of
@@ -70,9 +71,10 @@ Borrowers can use the Rocket Lend contract to:
 - Repay a pool by withdrawing RPL from their node
 - Repay a pool by supplying fresh RPL - this may also be done by a third party
   on the borrower's behalf
-- Transfer their debt from one pool to another - if the new pool has the same
-  lender, this can be done up to the lender's allowance for transfers without
-  requiring available funds in the new pool
+- Transfer their debt from one pool to another (repaying the source with a
+  borrow from the target pool). If the target pool belongs to the same lender,
+  this can be done up to the lender's allowance for transfers without requiring
+  available funds in the target pool
 - Withdraw excess RPL (after repaying any debt) from their node to their
   withdrawal address
 - Withdraw ETH rewards from their node to their withdrawal address
@@ -109,7 +111,8 @@ Lenders can use the Rocket Lend contract to:
   one of their lending pools
 - Supply RPL to one of their lending pools - this may also be done by a third
   party on the lender's behalf
-- Set the allowance for transfers of debt into one of their lending pools
+- Set the allowance for transfers of debt into one of their lending pools from
+  their other lending pools
 - Withdraw RPL that is not currently borrowed from one of their lending pools
 - Withdraw any interest paid to one of their lending pools, and optionally supply it back to the pool
 - Withdraw any remaining debt (borrowed RPL plus interest) from a node after
