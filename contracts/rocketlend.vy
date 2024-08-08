@@ -856,5 +856,6 @@ def withdraw(_node: address, _amountRPL: uint256, _amountETH: uint256):
   assert self._debt(_node) <= self.borrowers[_node].RPL, "debt"
   if 0 < _amountETH:
     self.borrowers[_node].ETH -= _amountETH
+    self._checkBorrowLimit(_node)
     send(msg.sender, _amountETH, gas=msg.gas)
   log Withdraw(_node, _amountRPL, _amountETH, self.borrowers[_node].RPL, self.borrowers[_node].ETH)
