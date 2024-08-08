@@ -132,7 +132,7 @@ pendingLenderAddress: public(HashMap[uint256, address])
 
 struct PoolParams:
   lender: uint256
-  interestRate: uint256 # attoRPL per RPL borrowed per second (before loan end time)
+  interestRate: uint256 # attoRPL per RPL borrowed per second (doubled after loan end time)
   endTime: uint256 # seconds after Unix epoch
 
 params: public(HashMap[bytes32, PoolParams])
