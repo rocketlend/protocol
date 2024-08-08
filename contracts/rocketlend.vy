@@ -377,7 +377,7 @@ def _checkEndedOwing(_poolId: bytes32, _node: address):
   endTime: uint256 = self.params[_poolId].endTime
   assert endTime < block.timestamp, "term"
   if self.loans[_poolId][_node].startTime < endTime:
-    self._chargeInterest(_poolId, _node, endTime)
+    self._chargeInterest(_poolId, _node)
   assert 0 < self.loans[_poolId][_node].borrowed or 0 < self.loans[_poolId][_node].interestDue, "paid"
 
 @external
@@ -634,12 +634,13 @@ def _outstandingInterest(_poolId: bytes32, _node: address, _endTime: uint256) ->
           // oneRPL)
 
 @internal
-def _chargeInterest(_poolId: bytes32, _node: address, _endTime: uint256):
-  amount: uint256 = self._outstandingInterest(_poolId, _node, _endTime)
+def _chargeInterest(_poolId: bytes32, _node: address):
+  endTime: uint256 = self._effectiveEndTime(_poolId)
+  amount: uint256 = self._outstandingInterest(_poolId, _node, endTime)
   if 0 < amount:
     self.loans[_poolId][_node].interestDue += amount
     self.borrowers[_node].interestDue += amount
-  self.loans[_poolId][_node].startTime = _endTime
+  self.loans[_poolId][_node].startTime = endTime
 
 @internal
 def _repayInterest(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
@@ -698,7 +699,7 @@ def borrow(_poolId: bytes32, _node: address, _amount: uint256):
   self._checkFromBorrower(_node)
   assert block.timestamp < self.params[_poolId].endTime, "end"
   self._stakeRPLFor(_node, _amount)
-  self._chargeInterest(_poolId, _node, block.timestamp)
+  self._chargeInterest(_poolId, _node)
   self._lend(_poolId, _node, _amount)
   self._checkBorrowLimit(_node)
   log Borrow(_poolId, _node, _amount,
@@ -708,8 +709,7 @@ def borrow(_poolId: bytes32, _node: address, _amount: uint256):
 @external
 def repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: uint256):
   assert _amount == 0 or msg.sender == self.borrowers[_node].address, "auth"
-  endTime: uint256 = self._effectiveEndTime(_poolId)
-  self._chargeInterest(_poolId, _node, endTime)
+  self._chargeInterest(_poolId, _node)
   rocketNodeStaking: RocketNodeStakingInterface = self._getRocketNodeStaking()
   available: uint256 = 0
   if self.borrowers[_node].RPL < _amount:
@@ -730,8 +730,7 @@ def repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: u
 def transferDebt(_node: address, _fromPool: bytes32, _toPool: bytes32,
                  _fromAvailable: uint256, _fromInterest: uint256, _fromAllowance: uint256):
   self._checkFromBorrower(_node)
-  endTime: uint256 = self._effectiveEndTime(_fromPool)
-  self._chargeInterest(_fromPool, _node, endTime)
+  self._chargeInterest(_fromPool, _node)
   assert block.timestamp < self.params[_toPool].endTime, "end"
   if 0 < _fromAvailable:
     self._lend(_toPool, _node, _fromAvailable)
