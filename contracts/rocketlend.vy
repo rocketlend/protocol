@@ -317,8 +317,13 @@ def createPool(_params: PoolParams, _andSupply: uint256, _allowance: uint256, _b
   return poolId
 
 @internal
+@view
+def _lenderAddress(_poolId: bytes32) -> address:
+  return self.lenderAddress[self.params[_poolId].lender]
+
+@internal
 def _checkFromLender(_poolId: bytes32):
-  assert msg.sender == self.lenderAddress[self.params[_poolId].lender], "auth"
+  assert msg.sender == self._lenderAddress(_poolId), "auth"
 
 @internal
 def _supplyPool(_poolId: bytes32, _amount: uint256):
@@ -731,7 +736,11 @@ def repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: u
 @external
 def transferDebt(_node: address, _fromPool: bytes32, _toPool: bytes32,
                  _fromAvailable: uint256, _fromInterest: uint256, _fromAllowance: uint256):
-  self._checkFromBorrower(_node)
+  endedAndFromLender: bool = (
+    self.params[_fromPool].endTime < block.timestamp and
+    msg.sender == self._lenderAddress(_fromPool))
+  if not endedAndFromLender:
+    self._checkFromBorrower(_node)
   self._chargeInterest(_fromPool, _node)
   assert block.timestamp < self.params[_toPool].endTime, "end"
   if 0 < _fromAvailable:
