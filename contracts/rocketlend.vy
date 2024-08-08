@@ -622,25 +622,27 @@ def withdrawRPL(_node: address, _amount: uint256):
 
 @internal
 @view
-def _effectiveEndTime(_poolId: bytes32) -> uint256:
-  return min(self.params[_poolId].endTime, block.timestamp)
-
-@internal
-@view
-def _outstandingInterest(_poolId: bytes32, _node: address, _endTime: uint256) -> uint256:
-  return (self.loans[_poolId][_node].borrowed
-          * self.params[_poolId].interestRate
-          * (_endTime - self.loans[_poolId][_node].startTime)
-          // oneRPL)
+def _outstandingInterest(_borrowed: uint256, _rate: uint256, _startTime: uint256, _endTime: uint256) -> uint256:
+  return _borrowed * _rate * (_endTime - _startTime) // oneRPL
 
 @internal
 def _chargeInterest(_poolId: bytes32, _node: address):
-  endTime: uint256 = self._effectiveEndTime(_poolId)
-  amount: uint256 = self._outstandingInterest(_poolId, _node, endTime)
+  borrowed: uint256 = self.loans[_poolId][_node].borrowed
+  startTime: uint256 = self.loans[_poolId][_node].startTime
+  endTime: uint256 = self.params[_poolId].endTime
+  rate: uint256 = self.params[_poolId].interestRate
+  amount: uint256 = empty(uint256)
+  if block.timestamp < endTime:
+    amount += self._outstandingInterest(borrowed, rate, startTime, block.timestamp)
+  elif startTime < endTime:
+    amount += self._outstandingInterest(borrowed, rate, startTime, endTime)
+    amount += self._outstandingInterest(borrowed, 2 * rate, endTime, block.timestamp)
+  else:
+    amount += self._outstandingInterest(borrowed, 2 * rate, startTime, block.timestamp)
   if 0 < amount:
     self.loans[_poolId][_node].interestDue += amount
     self.borrowers[_node].interestDue += amount
-  self.loans[_poolId][_node].startTime = endTime
+  self.loans[_poolId][_node].startTime = block.timestamp
 
 @internal
 def _repayInterest(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:

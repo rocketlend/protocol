@@ -50,9 +50,9 @@ Each pool is identified by the following parameters:
   borrowed and not yet repaid, charged as interest to the borrower. Interest is
   charged on the borrowed amount, i.e., without compounding.
 - End time: the time by which the lender wishes the pool's RPL to be repaid.
-  Before this time, interest is charged on borrowed RPL. After this time, any
-  outstanding debt (including interest) can be seized by the lender from any of
-  the borrower's RPL or ETH as it is withdrawn.
+  After this time, the interest rate doubles, and outstanding debt plus
+  interest can be seized by the lender from any of the borrower's RPL or ETH as
+  it is withdrawn.
 
 RPL may be supplied to a pool (without changing its parameters) at any time.
 RPL that is not currently borrowed may be withdrawn from the pool at any time.
