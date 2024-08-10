@@ -736,11 +736,14 @@ def repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: u
 @external
 def transferDebt(_node: address, _fromPool: bytes32, _toPool: bytes32,
                  _fromAvailable: uint256, _fromInterest: uint256, _fromAllowance: uint256):
-  endedAndFromLender: bool = (
-    self.params[_fromPool].endTime < block.timestamp and
-    msg.sender == self._lenderAddress(_fromPool))
-  if not endedAndFromLender:
-    self._checkFromBorrower(_node)
+  if msg.sender != self.borrowers[_node].address:
+    # not from borrower allowed only if:
+    # from lender, after end time, to a pool of no greater interest rate
+    assert (
+      msg.sender == self._lenderAddress(_fromPool) and
+      self.params[_fromPool].endTime < block.timestamp and
+      self.params[_toPool].interestRate <= self.params[_fromPool].interestRate
+    ), "auth"
   self._chargeInterest(_fromPool, _node)
   assert block.timestamp < self.params[_toPool].endTime, "end"
   if 0 < _fromAvailable:
