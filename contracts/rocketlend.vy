@@ -9,6 +9,18 @@ MAX_NODE_MINIPOOLS: constant(uint256) = 2048
 MAX_ADDRESS_BATCH: constant(uint256) = 2048
 BORROW_LIMIT_PERCENT: constant(uint256) = 30
 
+ensRegistry: constant(address) = 0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e
+addrReverseNode: constant(bytes32) = 0x91d1777781884d03a6757a803996e38de2a42967fb37eeaca72729271025a9e2
+interface registryInterface:
+  def owner(_node: bytes32) -> address: view
+interface reverseRegistrarInterface:
+  def setName(_name: String[16]) -> bytes32: nonpayable
+@external
+def setName():
+  extcall reverseRegistrarInterface(
+    staticcall registryInterface(ensRegistry).owner(addrReverseNode)
+  ).setName("rocketlend.eth")
+
 interface RPLInterface:
   def decimals() -> uint8: view
   def transfer(_to: address, _value: uint256) -> bool: nonpayable
