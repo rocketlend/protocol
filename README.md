@@ -3,15 +3,15 @@
 Rocket Lend is a protocol for lending/borrowing RPL to stake on Rocket Pool
 nodes.
 
-No collateral asset is required to borrow RPL from lenders because the borrowed
-RPL is immediately staked on a node, and the withdrawal address for the node is
-verified to be the Rocket Lend smart contract that will enforce the terms of
-the loan. Another way to think of it is that the collateral for the loan is the
-node's staked assets (ETH and RPL).
+No additional collateral asset is required to borrow RPL from lenders because
+the borrowed RPL is immediately staked on a node, and the withdrawal address
+for the node is verified to be the Rocket Lend smart contract that will enforce
+the terms of the loan (as much as possible as withdrawal address). Another way
+to think of it is that the collateral for the loan is the node's staked ETH.
 
 ## Technical Design
 
-Rocket Lend consists of a single immutable smart contract ("the (Rocket Lend)
+Rocket Lend consists of a single immutable smart contract ("the Rocket Lend
 contract"), used for all interaction with the protocol and designed to be the
 primary and RPL withdrawal address for Rocket Pool nodes that borrow RPL from
 the protocol.
@@ -21,18 +21,19 @@ protocol, and "borrowers" who borrow RPL from the protocol to stake on Rocket
 Pool nodes.
 
 A lender is assigned a unique identifier when they register with Rocket Lend.
-They provide a withdrawal address (to which funds from the protocol will be
-sent), which can be changed.
+They provide an address to which funds from Rocket Lend will be sent, which can
+be changed.
 
-A borrower is identified by the Rocket Pool node they are borrowing for. They
-also have a withdrawal address, which can be changed, to which their funds are
-ultimately sent.
+A borrower is identified by the address of the Rocket Pool node they are
+borrowing for. They also provide an address to Rocket Lend (initially the
+node's withdrawal address before Rocket Lend), which can be changed, to which
+their funds are ultimately sent.
 
 ### Lending Pools
 
-The contract manages pools of RPL that are made available by lenders to be used
-by borrowers. There may be many pools active at once. Each lender may have any
-number of pools.
+The Rocket Lend contract manages pools of RPL that are made available by
+lenders to be used by borrowers. There may be many pools active at once. Each
+lender may have any number of pools.
 
 Although each pool has a single lender, the relationship between borrowers and
 pools is many to many. A given pool may lend RPL to many borrowers, and a given
@@ -41,8 +42,9 @@ borrower may borrow RPL from many pools.
 In return for providing RPL to be staked, lenders expect to receive interest.
 The interest rate is specified by the lender when the pool is created. It is
 charged on RPL that is actually borrowed, for the time during the loan term
-that it is borrowed. The lender also expects to eventually be repaid the RPL
-they supplied to a lending pool.
+that it is borrowed. After the loan term, if there is outstanding debt it is
+charged interest at double the rate. The lender also expects to eventually be
+repaid the RPL they supplied to a lending pool.
 
 Each pool is identified by the following parameters:
 - Lender: the identifier for the lender, who receives repaid RPL and interest.
@@ -68,6 +70,7 @@ Borrowers can use the Rocket Lend contract to:
 
 - Register as a borrower in the protocol by confirming their node's primary and
   RPL withdrawal addresses as the Rocket Lend contract
+- Change their (Rocket Lend) borrower address
 - Stake RPL from a pool onto their node
 - Repay a pool by withdrawing RPL from their node
 - Repay a pool by supplying fresh RPL - this may also be done by a third party
@@ -76,29 +79,30 @@ Borrowers can use the Rocket Lend contract to:
   borrow from the target pool). If the target pool belongs to the same lender,
   this can be done up to the lender's allowance for transfers without requiring
   available funds in the target pool
-- Withdraw excess RPL (after repaying any debt) from their node to their
-  withdrawal address
-- Withdraw ETH rewards from their node to their withdrawal address
-- Withdraw unstaked ETH from their node to their withdrawal address
-- Change their (Rocket Lend) withdrawal address
-- Exit Rocket Lend by changing their node's primary and RPL withdrawal addresses
+- Withdraw RPL stake or claim RPL or ETH rewards (after repaying any debt) from
+  their node to their balance in Rocket Lend. This includes handling Merkle
+  rewards
+- Withdraw ETH rewards and/or unstaked ETH from their node to their balance in
+  Rocket Lend. This includes handling minipool distributions and refunds, and
+  fee distributor distributions
+- Withdraw RPL and/or ETH from Rocket Lend to their borrower address, as long
+  as they remain within the borrow limit
+- Exit Rocket Lend by changing their node's primary and RPL withdrawal
+  addresses
 
 #### Borrow Limit
 
-The total amount borrowed by a borrower is limited by the ETH staked on their
-node. This reduces the incentive for a node operator to lock up borrowed RPL
-with no intention of ever using it.
+The total amount borrowed by a borrower is limited by the ETH staked (or
+deposited for staking) on their node (or withdrawn to Rocket Lend). This
+reduces the incentive for a node operator to lock up borrowed RPL with no
+intention of ever using it.
 
 The borrow limit is 50% of the value of the following: ETH bonded to currently
-active minipools plus ETH supplied (via stake on behalf) for creating new
-minipools. It is denominated in RPL using the RPL price from Rocket Pool at the
-time RPL is being borrowed.
-
-Rewards and withdrawn funds are not included, so if a borrower reaches their
-borrow limit they should claim and restake these funds to be able to borrow
-more.
-
-TODO: discuss motivation for borrow limit and choice of percentage
+active minipools, ETH supplied (via stake on behalf) for creating new
+minipools, and ETH withdrawn from the node into the borrower's Rocket Lend
+balance. (Unclaimed rewards are not included.) It is denominated in RPL using
+the RPL price from Rocket Pool at the time the limit is checked, that is, when
+RPL is borrowed or when ETH is withdrawn from Rocket Lend.
 
 ### Lender Actions
 
@@ -115,16 +119,13 @@ Lenders can use the Rocket Lend contract to:
 - Set the allowance for transfers of debt into one of their lending pools from
   their other lending pools
 - Withdraw RPL that is not currently borrowed from one of their lending pools
-- Withdraw any interest paid to one of their lending pools, and optionally supply it back to the pool
+- Withdraw any interest paid to one of their lending pools, and optionally
+  supply it back to the pool
 - Withdraw any remaining debt (borrowed RPL plus interest) from a node after
   the end time of the lending pool
-- Force a claim/withdrawal of ETH or RPL from any borrower that has defaulted
-  on a loan from one of the lender's pools, up to the outstanding debt amount
-
-### Defaults
-
-TODO: how defaulting is assessed and repaid
-TODO: how RPL slashing might affect a default
+- Force a claim/withdrawal of ETH or RPL from the node of a borrower that has
+  defaulted on a loan from one of the lender's pools, up to the outstanding
+  debt amount
 
 ## Contract API
 
@@ -344,8 +345,11 @@ Vyper), chosen to be large enough to be practically unlimited.
     - `totalRPL: uint256`
     - `totalETH: uint256`
 
-## Security Considerations
+## Additional Information
 
+TODO: discuss RPL slashing
+TODO: discuss poorly performing or abandoned nodes
+TODO: discuss possible griefing vectors and mitigations
 TODO: discuss incentives for various scenarios
 TODO: discuss possibilities for funds getting locked
 TODO: discuss affects of RPL price volatility for defaults
