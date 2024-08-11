@@ -88,7 +88,7 @@ The total amount borrowed by a borrower is limited by the ETH staked on their
 node. This reduces the incentive for a node operator to lock up borrowed RPL
 with no intention of ever using it.
 
-The borrow limit is 30% of the value of the following: ETH bonded to currently
+The borrow limit is 50% of the value of the following: ETH bonded to currently
 active minipools plus ETH supplied (via stake on behalf) for creating new
 minipools. It is denominated in RPL using the RPL price from Rocket Pool at the
 time RPL is being borrowed.
@@ -139,7 +139,7 @@ Vyper), chosen to be large enough to be practically unlimited.
 |`MAX_PROOF_LENGTH`     |      32 | ~ 4 billion claimers |
 |`MAX_NODE_MINIPOOLS`   |    2048 |                      |
 |`MAX_ADDRESS_BATCH`    |    2048 |                      |
-|`BORROW_LIMIT_PERCENT` |      30 |                      |
+|`BORROW_LIMIT_PERCENT` |      50 |                      |
 
 ### Structs
 

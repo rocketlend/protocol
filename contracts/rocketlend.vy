@@ -7,7 +7,7 @@ MAX_CLAIM_INTERVALS: constant(uint256) = 128 # ~10 years
 MAX_PROOF_LENGTH: constant(uint256) = 32 # ~ 4 billion claimers
 MAX_NODE_MINIPOOLS: constant(uint256) = 2048
 MAX_ADDRESS_BATCH: constant(uint256) = 2048
-BORROW_LIMIT_PERCENT: constant(uint256) = 30
+BORROW_LIMIT_PERCENT: constant(uint256) = 50
 
 ensRegistry: constant(address) = 0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e
 addrReverseNode: constant(bytes32) = 0x91d1777781884d03a6757a803996e38de2a42967fb37eeaca72729271025a9e2
