@@ -46,9 +46,10 @@ they supplied to a lending pool.
 
 Each pool is identified by the following parameters:
 - Lender: the identifier for the lender, who receives repaid RPL and interest.
-- Interest rate: the number of attoRPL per second per RPL that has been
-  borrowed and not yet repaid, charged as interest to the borrower. Interest is
-  charged on the borrowed amount, i.e., without compounding.
+- Interest rate: the percentage rate (RPL per RPL borrowed, as a percentage,
+  per year), charged as interest to the borrower. Interest is charged on the
+  borrowed amount, i.e., without compounding, at one-second granularity. Only a
+  whole number percentage can be specified.
 - End time: the time by which the lender wishes the pool's RPL to be repaid.
   After this time, the interest rate doubles, and outstanding debt plus
   interest can be seized by the lender from any of the borrower's RPL or ETH as
@@ -145,7 +146,7 @@ Vyper), chosen to be large enough to be practically unlimited.
 
 - `PoolParams` (per pool id)
   - `lender`: identifier (non-negative integer) of the pool owner
-  - `interestRate`: attoRPL (i.e. RPL wei) per RPL borrowed per second (before the loan end time)
+  - `interestRate`: interest rate (APR) as a whole-number percentage
   - `endTime`: seconds after the Unix epoch when the loan ends
 
 - `PoolState` (per pool id)

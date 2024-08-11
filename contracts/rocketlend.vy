@@ -8,6 +8,7 @@ MAX_PROOF_LENGTH: constant(uint256) = 32 # ~ 4 billion claimers
 MAX_NODE_MINIPOOLS: constant(uint256) = 2048
 MAX_ADDRESS_BATCH: constant(uint256) = 2048
 BORROW_LIMIT_PERCENT: constant(uint256) = 50
+SECONDS_PER_YEAR: constant(uint256) = 365 * 24 * 60 * 60
 
 ensRegistry: constant(address) = 0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e
 addrReverseNode: constant(bytes32) = 0x91d1777781884d03a6757a803996e38de2a42967fb37eeaca72729271025a9e2
@@ -146,7 +147,7 @@ pendingLenderAddress: public(HashMap[uint256, address])
 
 struct PoolParams:
   lender: uint256
-  interestRate: uint256 # attoRPL per RPL borrowed per second (doubled after loan end time)
+  interestRate: uint256 # whole number percentage APR
   endTime: uint256 # seconds after Unix epoch
 
 params: public(HashMap[bytes32, PoolParams])
@@ -645,7 +646,8 @@ def withdrawRPL(_node: address, _amount: uint256):
 @internal
 @view
 def _outstandingInterest(_borrowed: uint256, _rate: uint256, _startTime: uint256, _endTime: uint256) -> uint256:
-  return _borrowed * _rate * (_endTime - _startTime) // oneRPL
+  # _rate is percentage RPL per RPL per Year
+  return _borrowed * _rate * (_endTime - _startTime) // 100 // SECONDS_PER_YEAR
 
 @internal
 def _chargeInterest(_poolId: bytes32, _node: address):

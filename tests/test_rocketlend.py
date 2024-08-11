@@ -8,6 +8,8 @@ rocketStorageAddresses = dict(
         mainnet='0x1d8f8f00cfa6758d7bE78336684788Fb0ee0Fa46',
         holesky='0x594Fb75D3dc2DFa0150Ad03F99F97817747dd4E1')
 
+SECONDS_PER_YEAR = 365 * 24 * 60 * 60
+
 @pytest.fixture()
 def rocketStorage(chain, Contract):
     return Contract(rocketStorageAddresses[chain.provider.network.name.removesuffix('-fork')])
@@ -132,7 +134,7 @@ def time_from_now(**kwargs):
     return round(time.time() + datetime.timedelta(**kwargs).total_seconds())
 
 def test_create_pool(rocketlendf, lender2):
-    params = dict(lender=1, interestRate=100, endTime=time_from_now(days=3))
+    params = dict(lender=1, interestRate=1, endTime=time_from_now(days=3))
     receipt = rocketlendf.createPool(params, 0, 0, [0], sender=lender2)
     logs = rocketlendf.CreatePool.from_receipt(receipt)
     assert len(logs) == 1
@@ -145,7 +147,7 @@ def grab_RPL(who, amount, RPLToken, rocketVaultImpersonated, rocketlend):
 def test_create_pool_with_supply(rocketlendf, RPLToken, rocketVaultImpersonated, lender2):
     amount = 20 * 10 ** RPLToken.decimals()
     grab_RPL(lender2, amount, RPLToken, rocketVaultImpersonated, rocketlendf)
-    params = dict(lender=1, interestRate=100, endTime=time_from_now(days=3))
+    params = dict(lender=1, interestRate=1, endTime=time_from_now(days=3))
     receipt = rocketlendf.createPool(params, amount, 0, [0], sender=lender2)
     logs = rocketlendf.CreatePool.from_receipt(receipt)
     assert len(logs) == 1
@@ -155,7 +157,7 @@ def rocketlendp(rocketlendf, RPLToken, rocketVaultImpersonated, lender2):
     amount = 200 * 10 ** RPLToken.decimals()
     grab_RPL(lender2, amount, RPLToken, rocketVaultImpersonated, rocketlendf)
     endTime=time_from_now(weeks=2)
-    params = dict(lender=1, interestRate=100_000, endTime=endTime)
+    params = dict(lender=1, interestRate=10, endTime=endTime)
     receipt = rocketlendf.createPool(params, amount, 0, [0], sender=lender2)
     poolId = rocketlendf.CreatePool.from_receipt(receipt)[0].id
     return dict(receipt=receipt, lenderId=1, lender=lender2, rocketlend=rocketlendf, poolId=poolId, endTime=endTime)
@@ -456,4 +458,4 @@ def test_borrow_again(rocketlendp, RPLToken, borrower1b):
     assert log['node'] == node
     assert log['amount'] == amount
     assert log['borrowed'] == amount + borrower1b['amount']
-    assert log['interestDue'] == borrower1b['amount'] * rocketlend.params(poolId)['interestRate'] / oneRPL * duration
+    assert log['interestDue'] == borrower1b['amount'] * rocketlend.params(poolId)['interestRate'] * duration // 100 // SECONDS_PER_YEAR
