@@ -51,6 +51,8 @@ interface RocketNodeStakingInterface:
   def getNodeETHProvided(_nodeAddress: address) -> uint256: view
   def stakeRPLFor(_nodeAddress: address, _amount: uint256): nonpayable
   def withdrawRPL(_nodeAddress: address, _amount: uint256): nonpayable
+  def getRPLLockingAllowed(_nodeAddress: address) -> bool: view
+  def setRPLLockingAllowed(_nodeAddress: address, _allowed: bool): nonpayable
 rocketNodeStakingKey: constant(bytes32) = keccak256("contract.addressrocketNodeStaking")
 
 interface RocketRewardsPoolInterface:
@@ -606,6 +608,9 @@ def joinAsBorrower(_node: address):
     self.borrowers[_node].address = currentWithdrawalAddress
     extcall rocketStorage.confirmWithdrawalAddress(_node)
   extcall self._getRocketNodeManager().setRPLWithdrawalAddress(_node, self, True)
+  rocketNodeStaking: RocketNodeStakingInterface = self._getRocketNodeStaking()
+  if (staticcall rocketNodeStaking.getRPLLockingAllowed(_node)):
+    extcall rocketNodeStaking.setRPLLockingAllowed(_node, False)
   self._updateIndex(_node, staticcall self._getRewardsPool().getRewardIndex())
   log JoinProtocol(_node)
 
