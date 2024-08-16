@@ -720,6 +720,10 @@ def _debt(_node: address) -> uint256:
 def _checkBorrowLimit(_node: address):
   assert self._debt(_node) <= self._borrowLimit(_node), "lim"
 
+@internal
+def _checkBorrowLimit2(_node: address):
+  assert self._debt(_node) <= 2 * self._borrowLimit(_node), "lim"
+
 @external
 def borrow(_poolId: bytes32, _node: address, _amount: uint256):
   self._checkFromBorrower(_node)
@@ -887,6 +891,6 @@ def withdraw(_node: address, _amountRPL: uint256, _amountETH: uint256):
   assert self._debt(_node) <= self.borrowers[_node].RPL, "debt"
   if 0 < _amountETH:
     self.borrowers[_node].ETH -= _amountETH
-    self._checkBorrowLimit(_node)
+    self._checkBorrowLimit2(_node)
     send(msg.sender, _amountETH, gas=msg.gas)
   log Withdraw(_node, _amountRPL, _amountETH, self.borrowers[_node].RPL, self.borrowers[_node].ETH)

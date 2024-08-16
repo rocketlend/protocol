@@ -92,17 +92,22 @@ Borrowers can use the Rocket Lend contract to:
 
 #### Borrow Limit
 
-The total amount borrowed by a borrower is limited by the ETH staked (or
-deposited for staking) on their node (or withdrawn to Rocket Lend). This
-reduces the incentive for a node operator to lock up borrowed RPL with no
+The total amount borrowed by a borrower (plus interest) is limited by the ETH
+staked (or deposited for staking) on their node (or withdrawn to Rocket Lend).
+This reduces the incentive for a node operator to lock up borrowed RPL with no
 intention of ever using it.
 
-The borrow limit is 50% of the value of the following: ETH bonded to currently
-active minipools, ETH supplied (via stake on behalf) for creating new
-minipools, and ETH withdrawn from the node into the borrower's Rocket Lend
-balance. (Unclaimed rewards are not included.) It is denominated in RPL using
-the RPL price from Rocket Pool at the time the limit is checked, that is, when
-RPL is borrowed or when ETH is withdrawn from Rocket Lend.
+The borrow limit is 50% of the value of the borrower's "available ETH", defined
+as: ETH bonded to currently active minipools, ETH supplied (via stake on
+behalf) for creating new minipools, and ETH withdrawn from the node into the
+borrower's Rocket Lend balance. (Unclaimed rewards are not included.) It is
+denominated in RPL using the RPL price from Rocket Pool at the time the limit
+is checked, that is, when RPL is borrowed.
+
+The borrow limit is also checked when ETH is withdrawn from Rocket Lend, but
+for withdrawals the limit is doubled. In other words, when withdrawing ETH from
+Rocket Lend, we ensure that the borrower's borrowed RPL plus unpaid interest
+remains below 100% of the borrower's available ETH.
 
 ### Lender Actions
 
