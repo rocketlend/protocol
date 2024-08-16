@@ -153,30 +153,30 @@ Vyper), chosen to be large enough to be practically unlimited.
 ### Structs
 
 - `PoolParams` (per pool id)
-  - `lender`: identifier (non-negative integer) of the pool owner
-  - `interestRate`: interest rate (APR) as a whole-number percentage
-  - `endTime`: seconds after the Unix epoch when the loan ends
+  - `lender: uint256`: identifier (non-negative integer) of the pool owner
+  - `interestRate: uint8`: interest rate (APR) as a whole-number percentage
+  - `endTime: uint256`: seconds after the Unix epoch when the loan ends
 
 - `PoolState` (per pool id)
-  - `available`: amount of RPL available to be borrowed or returned to the lender
-  - `borrowed`: amount of RPL currently borrowed
-  - `allowance`: limit on how much RPL can be made available by transferring either borrowed RPL from another of the lender's pools, or interest from another of the lender's loans
-  - `interestPaid`: interest the pool has accrued (available to be claimed by the lender)
-  - `reclaimed`: amount of ETH accrued in service of defaults (available to be claimed by the lender)
+  - `available: uint256`: amount of RPL available to be borrowed or returned to the lender
+  - `borrowed: uint256`: amount of RPL currently borrowed
+  - `allowance: uint256`: limit on how much RPL can be made available by transferring either borrowed RPL from another of the lender's pools, or interest from another of the lender's loans
+  - `interestPaid: uint256`: interest the pool has accrued (available to be claimed by the lender)
+  - `reclaimed: uint256`: amount of ETH accrued in service of defaults (available to be claimed by the lender)
 
 - `LoanState` (per pool id and node (borrower))
-  - `borrowed`: amount of RPL currently borrowed in this loan
-  - `startTime`: start time for ongoing interest accumulation on the `borrowed` amount
-  - `interestDue`: interest due (accrued before `startTime`) but not yet paid by the borrower
+  - `borrowed: uint256`: amount of RPL currently borrowed in this loan
+  - `startTime: uint256`: start time for ongoing interest accumulation on the `borrowed` amount
+  - `interestDue: uint256`: interest due (accrued before `startTime`) but not yet paid by the borrower
 
 - `BorrowerState` (per node)
-  - `borrowed`: total RPL borrowed
-  - `interestDue`: interest due, not including ongoing interest on `borrowed`, but not yet paid
-  - `RPL`: amount of RPL available for (with priority) debt repayments or to be withdrawn
-  - `ETH`: amount of ETH available for (with priority) debt repayments on liquidation or to be withdrawn
-  - `index`: first not-yet-accounted-for Rocket Pool rewards interval index
-  - `address`: current (Rocket Lend) withdrawal address for the borrower
-  - `pending`: pending address used when changing the borrower address
+  - `borrowed: uint256`: total RPL borrowed
+  - `interestDue: uint256`: interest due, not including ongoing interest on `borrowed`, but not yet paid
+  - `RPL: uint256`: amount of RPL available for (with priority) debt repayments or to be withdrawn
+  - `ETH: uint256`: amount of ETH available for (with priority) debt repayments on liquidation or to be withdrawn
+  - `index: uint256`: first not-yet-accounted-for Rocket Pool rewards interval index
+  - `address: address`: current (Rocket Lend) withdrawal address for the borrower
+  - `pending: address`: pending address used when changing the borrower address
 
 ### Views
 

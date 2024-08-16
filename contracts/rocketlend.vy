@@ -148,7 +148,7 @@ pendingLenderAddress: public(HashMap[uint256, address])
 
 struct PoolParams:
   lender: uint256
-  interestRate: uint256 # whole number percentage APR
+  interestRate: uint8 # whole number percentage APR
   endTime: uint256 # seconds after Unix epoch
 
 params: public(HashMap[bytes32, PoolParams])
@@ -313,7 +313,7 @@ def confirmChangeLenderAddress(_lender: uint256):
 def _poolId(_params: PoolParams) -> bytes32:
   return keccak256(concat(
                      convert(_params.lender, bytes32),
-                     convert(_params.interestRate, bytes32),
+                     convert(_params.interestRate, bytes1),
                      convert(_params.endTime, bytes32)
                   ))
 
@@ -651,16 +651,16 @@ def withdrawRPL(_node: address, _amount: uint256):
 
 @internal
 @view
-def _outstandingInterest(_borrowed: uint256, _rate: uint256, _startTime: uint256, _endTime: uint256) -> uint256:
+def _outstandingInterest(_borrowed: uint256, _rate: uint8, _startTime: uint256, _endTime: uint256) -> uint256:
   # _rate is percentage RPL per RPL per Year
-  return _borrowed * _rate * (_endTime - _startTime) // 100 // SECONDS_PER_YEAR
+  return _borrowed * convert(_rate, uint256) * (_endTime - _startTime) // 100 // SECONDS_PER_YEAR
 
 @internal
 def _chargeInterest(_poolId: bytes32, _node: address):
   borrowed: uint256 = self.loans[_poolId][_node].borrowed
   startTime: uint256 = self.loans[_poolId][_node].startTime
   endTime: uint256 = self.params[_poolId].endTime
-  rate: uint256 = self.params[_poolId].interestRate
+  rate: uint8 = self.params[_poolId].interestRate
   amount: uint256 = empty(uint256)
   if block.timestamp < endTime:
     amount += self._outstandingInterest(borrowed, rate, startTime, block.timestamp)
