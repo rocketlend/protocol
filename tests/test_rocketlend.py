@@ -10,6 +10,8 @@ rocketStorageAddresses = dict(
 
 SECONDS_PER_YEAR = 365 * 24 * 60 * 60
 
+nullAddress = '0x0000000000000000000000000000000000000000'
+
 @pytest.fixture()
 def rocketStorage(chain, Contract):
     return Contract(rocketStorageAddresses[chain.provider.network.name.removesuffix('-fork')])
@@ -110,20 +112,59 @@ def test_change_borrower_other(rocketlend, node1, other):
 
 @pytest.fixture()
 def rocketlendReg1(rocketlend, lender1):
-    rocketlend.registerLender(sender=lender1)
-    return rocketlend
+    receipt = rocketlend.registerLender(sender=lender1)
+    log = rocketlend.RegisterLender.from_receipt(receipt)[0]
+    return dict(rocketlend=rocketlend,
+                lenderId=log.id,
+                lenderAddress=log.address)
 
 def test_create_expired_pool(rocketlendReg1, lender1):
-    params = dict(lender=0, interestRate=0, endTime=0)
-    receipt = rocketlendReg1.createPool(params, 0, 0, [0], sender=lender1)
-    logs = rocketlendReg1.CreatePool.from_receipt(receipt)
+    params = dict(lender=rocketlendReg1["lenderId"], interestRate=0, endTime=0)
+    rocketlend = rocketlendReg1["rocketlend"]
+    receipt = rocketlend.createPool(params, 0, 0, [0], sender=lender1)
+    logs = rocketlend.CreatePool.from_receipt(receipt)
     assert len(logs) == 1
     assert logs[0]['params'] == list(params.values())
 
+def test_change_lender_address_other(rocketlendReg1, other):
+    rocketlend = rocketlendReg1["rocketlend"]
+    lenderId = rocketlendReg1["lenderId"]
+    lenderAddress = rocketlendReg1["lenderAddress"]
+    with reverts('revert: auth'):
+        rocketlend.changeLenderAddress(lenderId, lenderAddress, False, sender=other)
+    with reverts('revert: auth'):
+        rocketlend.changeLenderAddress(lenderId, other, False, sender=other)
+    with reverts('revert: auth'):
+        rocketlend.changeLenderAddress(lenderId, lenderAddress, True, sender=other)
+
+def test_change_lender_address(rocketlendReg1, lender1, other):
+    rocketlend = rocketlendReg1["rocketlend"]
+    lenderId = rocketlendReg1["lenderId"]
+    lenderAddress = rocketlendReg1["lenderAddress"]
+    assert lender1 == lenderAddress
+    rocketlend.changeLenderAddress(lenderId, other, False, sender=lender1)
+    assert rocketlend.lenderAddress(lenderId) == lender1
+    assert rocketlend.pendingLenderAddress(lenderId) == other
+    with reverts('revert: auth'):
+        rocketlend.confirmChangeLenderAddress(lenderId, sender=lender1)
+    receipt = rocketlend.confirmChangeLenderAddress(lenderId, sender=other)
+    assert rocketlend.lenderAddress(lenderId) == other
+    assert rocketlend.pendingLenderAddress(lenderId) == nullAddress
+    logs = rocketlend.UpdateLender.from_receipt(receipt)
+    assert len(logs) == 1
+
+def test_change_lender_address_force(rocketlendReg1, lender1, other):
+    rocketlend = rocketlendReg1["rocketlend"]
+    lenderId = rocketlendReg1["lenderId"]
+    lenderAddress = rocketlendReg1["lenderAddress"]
+    receipt = rocketlend.changeLenderAddress(lenderId, other, True, sender=lender1)
+    assert rocketlend.lenderAddress(lenderId) == other
+    assert rocketlend.pendingLenderAddress(lenderId) == nullAddress
+
 @pytest.fixture()
 def rocketlendReg2(rocketlendReg1, lender2):
-    rocketlendReg1.registerLender(sender=lender2)
-    return rocketlendReg1
+    rocketlendReg1["rocketlend"].registerLender(sender=lender2)
+    return rocketlendReg1["rocketlend"]
 
 @pytest.fixture()
 def rocketlendf(rocketlendReg2, node3):
