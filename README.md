@@ -87,6 +87,8 @@ Borrowers can use the Rocket Lend contract to:
   fee distributor distributions
 - Withdraw RPL and/or ETH from Rocket Lend to their borrower address, as long
   as they remain within the borrow limit
+- Deposit ETH from their balance in Rocket Lend back onto their Rocket Pool
+  node
 - Exit Rocket Lend by changing their node's primary and RPL withdrawal
   addresses
 
@@ -221,6 +223,7 @@ Vyper), chosen to be large enough to be practically unlimited.
 - `distributeMinipools(_node: address, _minipools: DynArray[address, MAX_NODE_MINIPOOLS], _rewardsOnly: bool)`
 - `refundMinipools(_node: address, _minipools: DynArray[address, MAX_NODE_MINIPOOLS])`
 - `withdraw(_node: address, _amountRPL: uint256, _amountETH: uint256)`
+- `depositETH(_node: address, _amount: uint256)`
 
 ### Events
 
@@ -349,6 +352,10 @@ Vyper), chosen to be large enough to be practically unlimited.
     - `amountETH: indexed(uint256)`
     - `totalRPL: uint256`
     - `totalETH: uint256`
+- `DepositETH`
+    - `node: indexed(address)`
+    - `amount: indexed(uint256)`
+    - `total: indexed(uint256)`
 
 ## Additional Information
 

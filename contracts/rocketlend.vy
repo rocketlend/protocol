@@ -44,6 +44,7 @@ interface RocketNodeManagerInterface:
 rocketNodeManagerKey: constant(bytes32) = keccak256("contract.addressrocketNodeManager")
 
 interface RocketNodeDepositInterface:
+  def depositEthFor(_nodeAddress: address): payable
   def getNodeEthBalance(_nodeAddress: address) -> uint256: view
 rocketNodeDepositKey: constant(bytes32) = keccak256("contract.addressrocketNodeDeposit")
 
@@ -559,6 +560,11 @@ event Withdraw:
   totalRPL: uint256
   totalETH: uint256
 
+event DepositETH:
+  node: indexed(address)
+  amount: indexed(uint256)
+  total: indexed(uint256)
+
 @internal
 def _checkFromBorrower(_node: address):
   assert msg.sender == self.borrowers[_node].address, "auth"
@@ -894,3 +900,10 @@ def withdraw(_node: address, _amountRPL: uint256, _amountETH: uint256):
     self._checkBorrowLimit2(_node)
     send(msg.sender, _amountETH, gas=msg.gas)
   log Withdraw(_node, _amountRPL, _amountETH, self.borrowers[_node].RPL, self.borrowers[_node].ETH)
+
+@external
+def depositETH(_node: address, _amount: uint256):
+  self._checkFromBorrower(_node)
+  self.borrowers[_node].ETH -= _amount
+  extcall self._getRocketNodeDeposit().depositEthFor(_node, value=_amount)
+  log DepositETH(_node, _amount, self.borrowers[_node].ETH)
