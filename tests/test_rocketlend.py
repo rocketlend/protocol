@@ -218,6 +218,26 @@ def test_end_time_set(rocketlendp):
     assert (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=13) <
             datetime.datetime.fromtimestamp(endTime, datetime.timezone.utc))
 
+def test_supply_set(rocketlendp):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    receipt = rocketlendp['receipt']
+    log = rocketlend.SupplyPool.from_receipt(receipt)[0]
+    assert log.amount == log.total
+    assert rocketlend.pools(poolId).available == log.amount
+
+def test_supply_more_other(rocketlendp, RPLToken, rocketVaultImpersonated, other):
+    amount = 100 * 10 ** RPLToken.decimals()
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    orig_receipt = rocketlendp['receipt']
+    orig_amount = rocketlend.SupplyPool.from_receipt(orig_receipt)[0].amount
+    grab_RPL(other, amount, RPLToken, rocketVaultImpersonated, rocketlend)
+    receipt = rocketlend.supplyPool(poolId, amount, sender=other)
+    logs = rocketlend.SupplyPool.from_receipt(receipt)
+    assert len(logs) == 1
+    assert logs[0].total == orig_amount + amount
+
 def test_borrow_not_joined(rocketlendp, node1):
     rocketlend = rocketlendp['rocketlend']
     poolId = rocketlendp['poolId']
