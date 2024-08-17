@@ -296,6 +296,45 @@ def test_withdraw_unborrowed(rocketlendp, RPLToken):
     assert logs[0].total == amount - logs[0].amount
     assert rocketlend.pools(poolId).available == logs[0].total
 
+def test_change_allowed_to_borrow_other(rocketlendp, other):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    with reverts('revert: auth'):
+        rocketlend.changeAllowedToBorrow(poolId, True, [], sender=other)
+
+def test_change_allowed_to_borrow_true(rocketlendp, node1, node2):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    lender = rocketlendp['lender']
+    receipt = rocketlend.changeAllowedToBorrow(poolId, True, [node1, node2], sender=lender)
+    assert not rocketlend.allowedToBorrow(poolId, nullAddress)
+    assert rocketlend.allowedToBorrow(poolId, node1)
+    assert rocketlend.allowedToBorrow(poolId, node2)
+    logs = rocketlend.ChangeAllowedToBorrow.from_receipt(receipt)
+    assert len(logs) == 1
+
+def test_change_allowed_to_borrow_false_partial(rocketlendp, node1, node2):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    lender = rocketlendp['lender']
+    rocketlend.changeAllowedToBorrow(poolId, True, [node1, node2], sender=lender)
+    rocketlend.changeAllowedToBorrow(poolId, False, [node1], sender=lender)
+    assert not rocketlend.allowedToBorrow(poolId, nullAddress)
+    assert not rocketlend.allowedToBorrow(poolId, node1)
+    assert rocketlend.allowedToBorrow(poolId, node2)
+
+def test_change_allowed_to_borrow_false_extra(rocketlendp, node1, node2):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    lender = rocketlendp['lender']
+    rocketlend.changeAllowedToBorrow(poolId, True, [node1], sender=lender)
+    rocketlend.changeAllowedToBorrow(poolId, False, [node1, node2], sender=lender)
+    assert not rocketlend.allowedToBorrow(poolId, nullAddress)
+    assert not rocketlend.allowedToBorrow(poolId, node1)
+    rocketlend.changeAllowedToBorrow(poolId, True, [nullAddress], sender=lender)
+    assert rocketlend.allowedToBorrow(poolId, nullAddress)
+    assert not rocketlend.allowedToBorrow(poolId, node1)
+
 def test_borrow_not_joined(rocketlendp, node1):
     rocketlend = rocketlendp['rocketlend']
     poolId = rocketlendp['poolId']
