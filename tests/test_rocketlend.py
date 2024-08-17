@@ -201,7 +201,7 @@ def rocketlendp(rocketlendf, RPLToken, rocketVaultImpersonated, lender2):
     params = dict(lender=1, interestRate=10, endTime=endTime)
     receipt = rocketlendf.createPool(params, amount, 0, [0], sender=lender2)
     poolId = rocketlendf.CreatePool.from_receipt(receipt)[0].id
-    return dict(receipt=receipt, lenderId=1, lender=lender2, rocketlend=rocketlendf, poolId=poolId, endTime=endTime)
+    return dict(receipt=receipt, lenderId=1, lender=lender2, rocketlend=rocketlendf, poolId=poolId, endTime=endTime, amount=amount)
 
 def test_lender_set(rocketlendp):
     rocketlend = rocketlendp['rocketlend']
@@ -226,6 +226,13 @@ def test_supply_set(rocketlendp):
     assert log.amount == log.total
     assert rocketlend.pools(poolId).available == log.amount
 
+def test_allowed_to_borrow_set(rocketlendp):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    lender = rocketlendp['lender']
+    assert rocketlend.allowedToBorrow(poolId, nullAddress)
+    assert not rocketlend.allowedToBorrow(poolId, lender)
+
 def test_supply_more_other(rocketlendp, RPLToken, rocketVaultImpersonated, other):
     amount = 100 * 10 ** RPLToken.decimals()
     rocketlend = rocketlendp['rocketlend']
@@ -237,6 +244,27 @@ def test_supply_more_other(rocketlendp, RPLToken, rocketVaultImpersonated, other
     logs = rocketlend.SupplyPool.from_receipt(receipt)
     assert len(logs) == 1
     assert logs[0].total == orig_amount + amount
+
+def test_withdraw_other(rocketlendp, other):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    amount = rocketlendp['amount'] // 2
+    with reverts('revert: auth'):
+        rocketlend.withdrawFromPool(poolId, amount, sender=other)
+
+def test_withdraw_unborrowed(rocketlendp, RPLToken):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    lender = rocketlendp['lender']
+    amount = rocketlendp['amount']
+    before = RPLToken.balanceOf(lender)
+    receipt = rocketlend.withdrawFromPool(poolId, amount // 3, sender=lender)
+    after = RPLToken.balanceOf(lender)
+    logs = rocketlend.WithdrawFromPool.from_receipt(receipt)
+    assert len(logs) == 1
+    assert logs[0].amount == after - before
+    assert logs[0].total == amount - logs[0].amount
+    assert rocketlend.pools(poolId).available == logs[0].total
 
 def test_borrow_not_joined(rocketlendp, node1):
     rocketlend = rocketlendp['rocketlend']
