@@ -335,6 +335,20 @@ def test_change_allowed_to_borrow_false_extra(rocketlendp, node1, node2):
     assert rocketlend.allowedToBorrow(poolId, nullAddress)
     assert not rocketlend.allowedToBorrow(poolId, node1)
 
+def test_withdraw_ether_from_pool_other(rocketlendp, other):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    with reverts('revert: auth'):
+        rocketlend.withdrawEtherFromPool(poolId, 20, sender=other)
+
+def test_withdraw_ether_from_pool_none(rocketlendp):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    lender = rocketlendp['lender']
+    assert rocketlend.pools(poolId).reclaimed == 0
+    with reverts():
+        rocketlend.withdrawEtherFromPool(poolId, 20, sender=lender)
+
 def test_borrow_not_joined(rocketlendp, node1):
     rocketlend = rocketlendp['rocketlend']
     poolId = rocketlendp['poolId']
