@@ -233,6 +233,36 @@ def test_allowed_to_borrow_set(rocketlendp):
     assert rocketlend.allowedToBorrow(poolId, nullAddress)
     assert not rocketlend.allowedToBorrow(poolId, lender)
 
+def test_allowance_set(rocketlendp):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    assert rocketlend.pools(poolId).allowance == 0
+
+def test_set_allowance_other(rocketlendp, other):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    with reverts('revert: auth'):
+        rocketlend.setAllowance(poolId, 0, sender=other)
+
+def test_set_allowance_zero(rocketlendp):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    lender = rocketlendp['lender']
+    rocketlend.setAllowance(poolId, 0, sender=lender)
+    assert rocketlend.pools(poolId).allowance == 0
+
+def test_set_allowance_nonzero(rocketlendp):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    lender = rocketlendp['lender']
+    amount = 1000000
+    receipt = rocketlend.setAllowance(poolId, amount, sender=lender)
+    assert rocketlend.pools(poolId).allowance == amount
+    logs = rocketlend.SetAllowance.from_receipt(receipt)
+    assert len(logs) == 1
+    assert logs[0].old == 0
+    assert logs[0].new == amount
+
 def test_supply_more_other(rocketlendp, RPLToken, rocketVaultImpersonated, other):
     amount = 100 * 10 ** RPLToken.decimals()
     rocketlend = rocketlendp['rocketlend']
