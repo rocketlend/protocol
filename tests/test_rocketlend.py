@@ -37,6 +37,14 @@ def rocketNodeDeposit(rocketStorage, Contract):
     return Contract(rocketStorage.getAddress(keccak('contract.addressrocketNodeDeposit'.encode())))
 
 @pytest.fixture()
+def rocketRewardsPool(rocketStorage, Contract):
+    return Contract(rocketStorage.getAddress(keccak('contract.addressrocketRewardsPool'.encode())))
+
+@pytest.fixture()
+def rocketMerkleDistributor(rocketStorage, Contract):
+    return Contract(rocketStorage.getAddress(keccak('contract.addressrocketMerkleDistributorMainnet'.encode())))
+
+@pytest.fixture()
 def deployer(accounts):
     return accounts[5]
 
@@ -468,6 +476,14 @@ def test_leave_protocol(rocketlendp, borrower1):
     logs = rocketlend.LeaveProtocol.from_receipt(receipt)
     assert len(logs) == 1
     assert logs[0]['node'] == node
+
+def test_intervals_set_first_10(borrower1, rocketRewardsPool, rocketMerkleDistributor):
+    rocketlend = borrower1['rocketlend']
+    node = borrower1['node']
+    current_index = rocketRewardsPool.getRewardIndex()
+    assert rocketlend.borrowers(node).index == current_index
+    for i in range(max(current_index, 10)):
+        rocketlend.intervals(node, i) == rocketMerkleDistributor.isClaimed(i, node)
 
 def test_leave_rejoin_wa_unset(rocketlendp, borrower1):
     rocketlend = rocketlendp['rocketlend']
