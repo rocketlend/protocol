@@ -503,6 +503,32 @@ def borrower1b(rocketlendp, RPLToken, rocketNodeDeposit, borrower1, other):
     receipt = rocketlend.borrow(poolId, node, amount, sender=borrower)
     return dict(borrower1, amount=amount, receipt=receipt)
 
+def test_deposit_eth_other(rocketlendp, borrower1, other):
+    rocketlend = rocketlendp['rocketlend']
+    node = borrower1['node']
+    with reverts('revert: auth'):
+        rocketlend.depositETH(node, 20, sender=other)
+
+def test_deposit_eth_none(rocketlendp, borrower1, rocketNodeDeposit):
+    rocketlend = rocketlendp['rocketlend']
+    node = borrower1['node']
+    borrower = borrower1['borrower']
+    assert rocketlend.borrowers(node).ETH == 0
+    with reverts('Integer underflow'):
+        rocketlend.depositETH(node, 20, sender=borrower)
+
+# only works after withdrawing some stake/rewards
+# def test_deposit_eth(rocketlendp, borrower1, rocketNodeDeposit):
+#     amount = 2 * 10 ** 18
+#     prev_balance = rocketlend.borrowers(node).ETH
+#     assert amount >= prev_balance
+#     prev_rp_balance = rocketNodeDeposit.getNodeEthBalance(node)
+#     receipt = rocketlend.depositETH(node, amount, sender=borrower)
+#     logs = rocketlend.DepositETH.from_receipt(receipt)
+#     assert len(logs) == 1
+#     assert amount == rocketNodeDeposit.getNodeEthBalance(node) - prev_rp_balance
+#     assert amount == rocketlend.borrowers(node).ETH - prev_balance
+
 def test_view_borrowed(rocketlendp, borrower1b):
     rocketlend = rocketlendp['rocketlend']
     node = borrower1b['node']
