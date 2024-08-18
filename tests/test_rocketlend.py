@@ -346,7 +346,7 @@ def test_withdraw_ether_from_pool_none(rocketlendp):
     poolId = rocketlendp['poolId']
     lender = rocketlendp['lender']
     assert rocketlend.pools(poolId).reclaimed == 0
-    with reverts():
+    with reverts('Integer underflow'):
         rocketlend.withdrawEtherFromPool(poolId, 20, sender=lender)
 
 def test_borrow_not_joined(rocketlendp, node1):
@@ -357,7 +357,7 @@ def test_borrow_not_joined(rocketlendp, node1):
 
 def test_join_protocol_wrong_pending(rocketlendp, node1):
     rocketlend = rocketlendp['rocketlend']
-    with reverts():
+    with reverts('revert: Confirmation must come from the pending withdrawal address'):
         rocketlend.joinAsBorrower(node1, sender=node1)
 
 def test_join_protocol(rocketlendp, node1, rocketStorage, accounts):
@@ -374,7 +374,7 @@ def test_join_protocol_rplwa_set(rocketlendp, node1, rocketStorage, rocketNodeMa
     current_wa = accounts[rocketStorage.getNodeWithdrawalAddress(node1)]
     rocketNodeManager.setRPLWithdrawalAddress(node1, other, True, sender=current_wa)
     rocketlend = rocketlendp['rocketlend']
-    with reverts():
+    with reverts('revert: Confirmation must come from the pending withdrawal address'):
         rocketlend.joinAsBorrower(node1, sender=current_wa)
 
 def test_join_protocol_wa_set_prev(rocketlendp, node1, rocketStorage, accounts):
@@ -444,7 +444,7 @@ def test_leave_rejoin_wa_unset(rocketlendp, borrower1):
     borrower = borrower1['borrower']
     node = borrower1['node']
     rocketlend.leaveAsBorrower(node, sender=borrower)
-    with reverts():
+    with reverts('revert: Confirmation must come from the pending withdrawal address'):
         rocketlend.joinAsBorrower(node, sender=borrower)
 
 def test_leave_rejoin(rocketlendp, borrower1, rocketStorage):
@@ -564,7 +564,7 @@ def test_repay_cannot_withdraw(rocketlendp, RPLToken, borrower1b):
     node = borrower1b['node']
     borrower = borrower1b['borrower']
     amount = 2 * 10 ** RPLToken.decimals()
-    with reverts():
+    with reverts('revert: The withdrawal cooldown period has not passed'):
         rocketlend.repay(poolId, node, amount, 0, sender=borrower)
 
 def test_repay_by_withdraw(rocketlendp, RPLToken, borrower1b, rocketNodeStaking, chain):
