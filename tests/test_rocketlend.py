@@ -101,6 +101,21 @@ def test_send_eth_other(rocketlend, other):
     with reverts('revert: auth'):
         other.transfer(rocketlend, 20)
 
+def test_set_name_other(rocketlend, other, Contract):
+    receipt = rocketlend.setName(sender=other)
+    ensRegistry = Contract('0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e')
+    addrReverseNode = '0x91d1777781884d03a6757a803996e38de2a42967fb37eeaca72729271025a9e2'
+    rocketlendNode = '0x07f70f0e37149c5ddb4e9d570b149208628f3fdd1a4f624d8f1be396063dd595'
+    resolver = Contract(ensRegistry.resolver(rocketlendNode))
+    reverseRegistry = Contract(ensRegistry.owner(addrReverseNode))
+    rev_logs = reverseRegistry.ReverseClaimed.from_receipt(receipt)
+    logs = resolver.NameChanged.from_receipt(receipt)
+    assert len(rev_logs) == 1
+    assert len(logs) == 1
+    assert rev_logs[0].addr == rocketlend
+    assert rev_logs[0].node == logs[0].node
+    assert logs[0].name == 'rocketlend.eth'
+
 def test_rocketstorage_address(rocketlend, rocketStorage):
     assert rocketlend.rocketStorage() == rocketStorage.address
 
@@ -422,6 +437,15 @@ def borrower1(rocketlendp, node1, rocketStorage, accounts):
     rocketStorage.setWithdrawalAddress(node1, rocketlend, False, sender=current_wa)
     rocketlend.joinAsBorrower(node1, sender=current_wa)
     return dict(node=node1, borrower=current_wa, rocketlend=rocketlend)
+
+def test_change_borrower_to_empty(borrower1):
+    rocketlend = borrower1['rocketlend']
+    node = borrower1['node']
+    borrower = borrower1['borrower']
+    with reverts('revert: null'):
+        rocketlend.changeBorrowerAddress(node, nullAddress, False, sender=borrower)
+    with reverts('revert: null'):
+        rocketlend.changeBorrowerAddress(node, nullAddress, True, sender=borrower)
 
 def test_join_twice(rocketlendp, borrower1):
     node = borrower1['node']
