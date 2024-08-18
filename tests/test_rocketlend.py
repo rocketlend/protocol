@@ -89,6 +89,10 @@ def rocketlend(project, rocketStorage, deployer):
 def test_RPL_token_address(rocketlend, RPLToken):
     assert rocketlend.RPL() == RPLToken.address
 
+def test_send_eth_other(rocketlend, other):
+    with reverts('revert: auth'):
+        other.transfer(rocketlend, 20)
+
 def test_rocketstorage_address(rocketlend, rocketStorage):
     assert rocketlend.rocketStorage() == rocketStorage.address
 
@@ -106,7 +110,7 @@ def test_register_lender1(rocketlend, lender1):
     assert logs[0]['id'] == nextId
     assert logs[0]['address'] == lender1
 
-def test_change_borrower_other(rocketlend, node1, other):
+def test_change_borrower_empty_other(rocketlend, node1, other):
     with reverts('revert: auth'):
         rocketlend.changeBorrowerAddress(node1, other, True, sender=other)
 
@@ -409,7 +413,7 @@ def borrower1(rocketlendp, node1, rocketStorage, accounts):
     rocketlend = rocketlendp['rocketlend']
     rocketStorage.setWithdrawalAddress(node1, rocketlend, False, sender=current_wa)
     rocketlend.joinAsBorrower(node1, sender=current_wa)
-    return dict(node=node1, borrower=current_wa)
+    return dict(node=node1, borrower=current_wa, rocketlend=rocketlend)
 
 def test_join_twice(rocketlendp, borrower1):
     node = borrower1['node']
@@ -417,6 +421,32 @@ def test_join_twice(rocketlendp, borrower1):
     rocketlend = rocketlendp['rocketlend']
     with reverts('revert: j'):
         rocketlend.joinAsBorrower(node, sender=borrower)
+
+def test_change_borrower_to_other_force(borrower1, other):
+    rocketlend = borrower1['rocketlend']
+    borrower = borrower1['borrower']
+    node = borrower1['node']
+    receipt = rocketlend.changeBorrowerAddress(node, other, True, sender=borrower)
+    logs = rocketlend.UpdateBorrower.from_receipt(receipt)
+    assert len(logs) == 1
+    assert logs[0].new == other
+
+def test_change_borrower_to_other(borrower1, other):
+    rocketlend = borrower1['rocketlend']
+    borrower = borrower1['borrower']
+    node = borrower1['node']
+    receipt1 = rocketlend.changeBorrowerAddress(node, other, False, sender=borrower)
+    logs1 = rocketlend.UpdateBorrower.from_receipt(receipt1)
+    assert len(logs1) == 0
+    assert rocketlend.borrowers(node).address == borrower
+    assert rocketlend.borrowers(node).pending == other
+    with reverts('revert: auth'):
+        rocketlend.confirmChangeBorrowerAddress(node, sender=borrower)
+    receipt2 = rocketlend.confirmChangeBorrowerAddress(node, sender=other)
+    logs2 = rocketlend.UpdateBorrower.from_receipt(receipt2)
+    assert len(logs2) == 1
+    assert rocketlend.borrowers(node).address == other
+    assert rocketlend.borrowers(node).pending == nullAddress
 
 def test_leave_protocol_not_joined(rocketlendp, node1):
     rocketlend = rocketlendp['rocketlend']
