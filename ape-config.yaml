@@ -4,3 +4,9 @@ plugins:
   - name: etherscan
 foundry:
   host: auto
+test:
+  coverage:
+    reports:
+      terminal: true
+      html:
+        verbose: true
