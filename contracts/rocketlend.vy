@@ -604,10 +604,6 @@ def _updateIndex(_node: address, _toIndex: uint256):
 @external
 def joinAsBorrower(_node: address):
   assert self.borrowers[_node].address == empty(address), "j"
-  assert not staticcall rocketStorage.getBool(
-    keccak256(concat(b"node.stake.for.allowed",
-                     convert(_node, bytes20),
-                     convert(self, bytes20)))), "sfa"
   currentWithdrawalAddress: address = staticcall rocketStorage.getNodeWithdrawalAddress(_node)
   if currentWithdrawalAddress == self:
     assert msg.sender == _node, "auth"
@@ -617,7 +613,7 @@ def joinAsBorrower(_node: address):
     extcall rocketStorage.confirmWithdrawalAddress(_node)
   extcall self._getRocketNodeManager().setRPLWithdrawalAddress(_node, self, True)
   rocketNodeStaking: RocketNodeStakingInterface = self._getRocketNodeStaking()
-  if (staticcall rocketNodeStaking.getRPLLockingAllowed(_node)):
+  if staticcall rocketNodeStaking.getRPLLockingAllowed(_node):
     extcall rocketNodeStaking.setRPLLockingAllowed(_node, False)
   self._updateIndex(_node, staticcall self._getRewardsPool().getRewardIndex())
   log JoinProtocol(_node)
