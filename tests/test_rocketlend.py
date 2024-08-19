@@ -480,6 +480,16 @@ def test_change_borrower_to_other(borrower1, other):
     assert rocketlend.borrowers(node).address == other
     assert rocketlend.borrowers(node).pending == nullAddress
 
+def test_stake_rpl_for_other(borrower1, other):
+    rocketlend = borrower1['rocketlend']
+    node = borrower1['node']
+    with reverts('revert: auth'):
+        rocketlend.stakeRPLFor(node, 0, sender=other)
+    with reverts('revert: auth'):
+        rocketlend.stakeRPLFor(node, 20, sender=other)
+    with reverts('revert: auth'):
+        rocketlend.stakeRPLFor(node, 20, sender=node)
+
 def test_leave_protocol_not_joined(rocketlendp, node1):
     rocketlend = rocketlendp['rocketlend']
     with reverts('revert: auth'):
@@ -571,7 +581,27 @@ def borrower1b(rocketlendp, RPLToken, rocketNodeDeposit, borrower1, other):
     amount = 50 * 10 ** RPLToken.decimals()
     rocketNodeDeposit.depositEthFor(node, value='8 ether', sender=other)
     receipt = rocketlend.borrow(poolId, node, amount, sender=borrower)
-    return dict(borrower1, amount=amount, receipt=receipt)
+    return dict(borrower1, poolId=poolId, amount=amount, receipt=receipt)
+
+def test_stake_rpl_for_not_approved(borrower1b, RPLToken, rocketVaultImpersonated):
+    rocketlend = borrower1b['rocketlend']
+    node = borrower1b['node']
+    borrower = borrower1b['borrower']
+    amount = 10 * 10 ** RPLToken.decimals()
+    grab_RPL(borrower, amount, RPLToken, rocketVaultImpersonated, None)
+    assert RPLToken.allowance(borrower, rocketlend) < amount
+    with reverts('revert: ERC20: transfer amount exceeds allowance'):
+        rocketlend.stakeRPLFor(node, amount, sender=borrower)
+
+def test_stake_rpl_for_too_much(borrower1b, RPLToken, rocketVaultImpersonated):
+    rocketlend = borrower1b['rocketlend']
+    node = borrower1b['node']
+    borrower = borrower1b['borrower']
+    amount = 10 * 10 ** RPLToken.decimals()
+    RPLToken.approve(rocketlend, amount, sender=borrower)
+    assert RPLToken.balanceOf(borrower) < amount
+    with reverts('revert: ERC20: transfer amount exceeds balance'):
+        rocketlend.stakeRPLFor(node, amount, sender=borrower)
 
 def test_deposit_eth_other(rocketlendp, borrower1, other):
     rocketlend = rocketlendp['rocketlend']
@@ -603,6 +633,14 @@ def test_view_borrowed(rocketlendp, borrower1b):
     rocketlend = rocketlendp['rocketlend']
     node = borrower1b['node']
     assert rocketlend.borrowers(node)['borrowed'] == borrower1b['amount']
+
+def test_view_loan(borrower1b):
+    rocketlend = borrower1b['rocketlend']
+    poolId = borrower1b['poolId']
+    node = borrower1b['node']
+    borrower = borrower1b['borrower']
+    assert rocketlend.loans(poolId, node).borrowed == borrower1b['amount']
+    assert rocketlend.loans(poolId, borrower).borrowed == 0
 
 def test_force_repay_not_ended(rocketlendp, borrower1b):
     rocketlend = rocketlendp['rocketlend']

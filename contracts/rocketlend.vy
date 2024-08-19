@@ -641,6 +641,7 @@ def _stakeRPLFor(_node: address, _amount: uint256):
 @external
 def stakeRPLFor(_node: address, _amount: uint256):
   self._checkFromBorrower(_node)
+  assert extcall RPL.transferFrom(msg.sender, self, _amount), "tf"
   self._stakeRPLFor(_node, _amount)
 
 @external
