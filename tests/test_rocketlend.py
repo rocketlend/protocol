@@ -11,10 +11,16 @@ rocketStorageAddresses = dict(
 SECONDS_PER_YEAR = 365 * 24 * 60 * 60
 
 nullAddress = '0x0000000000000000000000000000000000000000'
+stakingStatus = 2
 
 @pytest.fixture()
 def rocketStorage(chain, Contract):
     return Contract(rocketStorageAddresses[chain.provider.network.name.removesuffix('-fork')])
+
+@pytest.fixture()
+def minipoolABI(rocketStorage, Contract):
+    delegate = Contract(rocketStorage.getAddress(keccak('contract.addressrocketMinipoolDelegate'.encode())))
+    return list(delegate.identifier_lookup.values())
 
 @pytest.fixture()
 def RPLToken(rocketStorage, Contract):
@@ -27,6 +33,10 @@ def rocketVaultImpersonated(rocketStorage, accounts):
 @pytest.fixture()
 def rocketNodeManager(rocketStorage, Contract):
     return Contract(rocketStorage.getAddress(keccak('contract.addressrocketNodeManager'.encode())))
+
+@pytest.fixture()
+def rocketMinipoolManager(rocketStorage, Contract):
+    return Contract(rocketStorage.getAddress(keccak('contract.addressrocketMinipoolManager'.encode())))
 
 @pytest.fixture()
 def rocketNodeStaking(rocketStorage, Contract):
@@ -88,6 +98,13 @@ def node3(rocketNodeManager, accounts):
     node = accounts[nodeAddress]
     if node.balance < 10 ** 18:
       accounts[3].transfer(nodeAddress, '1 ETH')
+    return node
+
+@pytest.fixture()
+def nodeWithMPs(rocketNodeManager, rocketMinipoolManager, accounts):
+    nodeAddress = rocketNodeManager.getNodeAt(3000)
+    node = accounts[nodeAddress]
+    assert rocketMinipoolManager.getNodeActiveMinipoolCount(node) > 1
     return node
 
 @pytest.fixture()
@@ -631,18 +648,6 @@ def test_deposit_eth_none(rocketlendp, borrower1, rocketNodeDeposit):
     with reverts('Integer underflow'):
         rocketlend.depositETH(node, 20, sender=borrower)
 
-# only works after withdrawing some stake/rewards
-# def test_deposit_eth(rocketlendp, borrower1, rocketNodeDeposit):
-#     amount = 2 * 10 ** 18
-#     prev_balance = rocketlend.borrowers(node).ETH
-#     assert amount >= prev_balance
-#     prev_rp_balance = rocketNodeDeposit.getNodeEthBalance(node)
-#     receipt = rocketlend.depositETH(node, amount, sender=borrower)
-#     logs = rocketlend.DepositETH.from_receipt(receipt)
-#     assert len(logs) == 1
-#     assert amount == rocketNodeDeposit.getNodeEthBalance(node) - prev_rp_balance
-#     assert amount == rocketlend.borrowers(node).ETH - prev_balance
-
 def test_view_borrowed(rocketlendp, borrower1b):
     rocketlend = rocketlendp['rocketlend']
     node = borrower1b['node']
@@ -779,3 +784,31 @@ def test_borrow_again(rocketlendp, RPLToken, borrower1b):
     assert log['amount'] == amount
     assert log['borrowed'] == amount + borrower1b['amount']
     assert log['interestDue'] == borrower1b['amount'] * rocketlend.params(poolId)['interestRate'] * duration // 100 // SECONDS_PER_YEAR
+
+@pytest.fixture()
+def nodeWithMPsJoined(rocketlend, rocketStorage, other, nodeWithMPs, accounts):
+    current_wa = accounts[rocketStorage.getNodeWithdrawalAddress(nodeWithMPs)]
+    rocketStorage.setWithdrawalAddress(nodeWithMPs, rocketlend, False, sender=current_wa)
+    rocketlend.joinAsBorrower(nodeWithMPs, sender=other)
+    return nodeWithMPs
+
+def test_distribute_rewards_two_MPs_from_other(rocketlend, nodeWithMPsJoined, rocketMinipoolManager, other, accounts, Contract, minipoolABI):
+    node = nodeWithMPsJoined
+    index = 0
+    minipools = []
+    while len(minipools) < 2:
+        minipool = Contract(rocketMinipoolManager.getNodeMinipoolAt(node, index), abi=minipoolABI)
+        if (minipool.getStatus() == stakingStatus):
+            minipools.append(minipool)
+        index += 1
+    index = 2
+    for minipool in minipools:
+        accounts[1].transfer(minipool, index * 10 ** 18)
+        index -= 1
+    prev_eth = rocketlend.borrowers(node).ETH
+    receipt = rocketlend.distributeMinipools(node, minipools, True, sender=other)
+    logs = rocketlend.DistributeMinipools.from_receipt(receipt)
+    assert len(logs) == 1
+    assert all(minipool.balance == 0 for minipool in minipools)
+    assert rocketlend.borrowers(node).ETH == logs[0].total
+    assert prev_eth + logs[0].amount == logs[0].total
