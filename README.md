@@ -214,6 +214,7 @@ Vyper), chosen to be large enough to be practically unlimited.
 - `joinAsBorrower(_node: address)`
 - `leaveAsBorrower(_node: address)`
 - `stakeRPLFor(_node: address, _amount: uint256)`
+- `setStakeRPLForAllowed(_node: address, _caller: address, _allowed: bool)`
 - `withdrawRPL(_node: address, _amount: uint256)`
 - `borrow(_poolId: bytes32, _node: address, _amount: uint256)`
 - `repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: uint256)`

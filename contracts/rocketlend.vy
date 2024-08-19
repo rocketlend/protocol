@@ -52,6 +52,7 @@ interface RocketNodeStakingInterface:
   def getNodeRPLStake(_nodeAddress: address) -> uint256: view
   def getNodeETHProvided(_nodeAddress: address) -> uint256: view
   def stakeRPLFor(_nodeAddress: address, _amount: uint256): nonpayable
+  def setStakeRPLForAllowed(_nodeAddress: address, _caller: address, _allowed: bool): nonpayable
   def withdrawRPL(_nodeAddress: address, _amount: uint256): nonpayable
   def getRPLLockingAllowed(_nodeAddress: address) -> bool: view
   def setRPLLockingAllowed(_nodeAddress: address, _allowed: bool): nonpayable
@@ -641,6 +642,11 @@ def _stakeRPLFor(_node: address, _amount: uint256):
 def stakeRPLFor(_node: address, _amount: uint256):
   self._checkFromBorrower(_node)
   self._stakeRPLFor(_node, _amount)
+
+@external
+def setStakeRPLForAllowed(_node: address, _caller: address, _allowed: bool):
+  self._checkFromBorrower(_node)
+  extcall self._getRocketNodeStaking().setStakeRPLForAllowed(_node, _caller, _allowed)
 
 @external
 def withdrawRPL(_node: address, _amount: uint256):
