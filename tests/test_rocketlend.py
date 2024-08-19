@@ -603,6 +603,20 @@ def test_stake_rpl_for_too_much(borrower1b, RPLToken, rocketVaultImpersonated):
     with reverts('revert: ERC20: transfer amount exceeds balance'):
         rocketlend.stakeRPLFor(node, amount, sender=borrower)
 
+def test_stake_rpl_for(borrower1b, RPLToken, rocketNodeStaking, rocketVaultImpersonated):
+    rocketlend = borrower1b['rocketlend']
+    node = borrower1b['node']
+    borrower = borrower1b['borrower']
+    amount = 20 * 10 ** RPLToken.decimals()
+    grab_RPL(borrower, amount, RPLToken, rocketVaultImpersonated, rocketlend)
+    prev_balance = RPLToken.balanceOf(borrower)
+    prev_RPL = rocketlend.borrowers(node).RPL
+    prev_stake = rocketNodeStaking.getNodeRPLStake(node)
+    receipt = rocketlend.stakeRPLFor(node, amount, sender=borrower)
+    assert RPLToken.balanceOf(borrower) == prev_balance - amount
+    assert rocketlend.borrowers(node).RPL == prev_RPL
+    assert rocketNodeStaking.getNodeRPLStake(node) == prev_stake + amount
+
 def test_deposit_eth_other(rocketlendp, borrower1, other):
     rocketlend = rocketlendp['rocketlend']
     node = borrower1['node']
