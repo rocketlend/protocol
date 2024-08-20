@@ -210,7 +210,20 @@ def borrower1b(rocketlendp, RPLToken, rocketNodeDeposit, borrower1, other):
     amount = 50 * 10 ** RPLToken.decimals()
     rocketNodeDeposit.depositEthFor(node, value='8 ether', sender=other)
     receipt = rocketlend.borrow(poolId, node, amount, sender=borrower)
-    return dict(borrower1, poolId=poolId, amount=amount, receipt=receipt)
+    return dict(borrower1, poolId=poolId, lender=rocketlendp['lender'], amount=amount, receipt=receipt)
+
+## Repayment
+
+@pytest.fixture()
+def partialRepayment(borrower1b, other, RPLToken, rocketVaultImpersonated):
+    rocketlend = borrower1b['rocketlend']
+    poolId = borrower1b['poolId']
+    amountBorrowed = borrower1b['amount']
+    node = borrower1b['node']
+    amount = amountBorrowed // 2
+    grab_RPL(other, amount, RPLToken, rocketVaultImpersonated, rocketlend)
+    receipt = rocketlend.repay(poolId, node, 0, amount, sender=other)
+    return dict(receipt=receipt, node=node, amount=amount, rocketlend=rocketlend, poolId=poolId, lender=borrower1b['lender'])
 
 ## Rewards
 
@@ -308,10 +321,15 @@ def test_intervals_set_first_10(borrower1, rocketRewardsPool, rocketMerkleDistri
         rocketlend.intervals(node, i) == rocketMerkleDistributor.isClaimed(i, node)
 
 ### lenderAddress
-### TODO
+
+def test_lender_address_set(rocketlendReg1):
+    rocketlend = rocketlendReg1['rocketlend']
+    lenderAddress = rocketlendReg1['lenderAddress']
+    lenderId = rocketlendReg1['lenderId']
+    assert lenderAddress == rocketlend.lenderAddress(lenderId)
 
 ### pendingLenderAddress
-### TODO
+#### see test_change_lender_address
 
 ### rocketStorage
 
@@ -509,7 +527,50 @@ def test_withdraw_unborrowed(rocketlendp, RPLToken):
     assert rocketlend.pools(poolId).available == logs[0].total
 
 ### withdrawInterest
-### TODO
+
+def test_withdraw_interest_other(partialRepayment, other):
+    rocketlend = partialRepayment['rocketlend']
+    poolId = partialRepayment['poolId']
+    with reverts('revert: auth'):
+        rocketlend.withdrawInterest(poolId, 1, 0, sender=other)
+
+def test_withdraw_interest(partialRepayment, RPLToken):
+    rocketlend = partialRepayment['rocketlend']
+    poolId = partialRepayment['poolId']
+    lender = partialRepayment['lender']
+    supplyBefore = rocketlend.pools(poolId).available
+    paidBefore = rocketlend.pools(poolId).interestPaid
+    balanceBefore = RPLToken.balanceOf(lender)
+    amount = paidBefore // 2
+    assert 0 < amount
+    receipt = rocketlend.withdrawInterest(poolId, amount, 0, sender=lender)
+    logs = rocketlend.WithdrawInterest.from_receipt(receipt)
+    assert len(logs) == 1
+    assert logs[0].amount == amount
+    assert logs[0].supplied == 0
+    assert logs[0].interestPaid == paidBefore - amount
+    assert RPLToken.balanceOf(lender) == balanceBefore + amount
+    assert logs[0].available == supplyBefore
+    assert rocketlend.pools(poolId).interestPaid == logs[0].interestPaid
+
+def test_withdraw_interest_and_supply(partialRepayment, RPLToken):
+    rocketlend = partialRepayment['rocketlend']
+    poolId = partialRepayment['poolId']
+    lender = partialRepayment['lender']
+    supplyBefore = rocketlend.pools(poolId).available
+    paidBefore = rocketlend.pools(poolId).interestPaid
+    balanceBefore = RPLToken.balanceOf(lender)
+    supplyAmount = paidBefore // 2
+    assert 0 < supplyAmount
+    receipt = rocketlend.withdrawInterest(poolId, paidBefore, supplyAmount, sender=lender)
+    logs = rocketlend.WithdrawInterest.from_receipt(receipt)
+    assert len(logs) == 1
+    assert logs[0].amount == paidBefore
+    assert logs[0].supplied == supplyAmount
+    assert logs[0].interestPaid == 0
+    assert RPLToken.balanceOf(lender) == balanceBefore + paidBefore - supplyAmount
+    assert logs[0].available == supplyBefore + supplyAmount
+    assert rocketlend.pools(poolId).interestPaid == logs[0].interestPaid
 
 ### withdrawEtherFromPool
 
@@ -541,10 +602,10 @@ def test_force_repay_not_ended(rocketlendp, borrower1b):
         rocketlend.forceRepayETH(poolId, node, sender=lender)
 
 ### forceClaimMerkleRewards
-### TODO
+#### TODO
 
 ### forceDistributeRefund
-### TODO
+#### TODO
 
 ## Borrower actions
 
@@ -743,10 +804,10 @@ def test_stake_rpl_for(borrower1b, RPLToken, rocketNodeStaking, rocketVaultImper
     assert rocketNodeStaking.getNodeRPLStake(node) == prev_stake + amount
 
 ### setStakeRPLForAllowed
-### TODO
+#### TODO
 
 ### withdrawRPL
-### TODO
+#### TODO
 
 ### borrow
 
@@ -882,10 +943,10 @@ def test_repay_withdraw_supply_unauth(rocketlendp, borrower1b, RPLToken, rocketV
 
 
 ### transferDebt
-### TODO
+#### TODO
 
 ### distribute
-### TODO
+#### TODO
 
 ### distributeMinipools
 
@@ -910,15 +971,15 @@ def test_distribute_rewards_two_MPs_from_other(rocketlend, nodeWithMPsJoined, ro
     assert rocketlend.borrowers(node).ETH == logs[0].total
     assert prev_eth + logs[0].amount == logs[0].total
 
-# TODO: test distributing not just rewards
-# TODO: have someone else (not node) distribute rewards on a minipool via user distribute
-# TODO: use the above to test direct refunding afterwards
+#### TODO: test distributing not just rewards
+#### TODO: have someone else (not node) distribute rewards on a minipool via user distribute
+#### TODO: use the above to test direct refunding afterwards
 
 ### refundMinipools
-### TODO
+#### TODO
 
 ### withdraw
-### TODO
+#### TODO
 
 ### depositETH
 
@@ -968,3 +1029,6 @@ def test_deposit_eth(distributedRewards, rocketNodeDeposit, accounts):
     assert len(logs) == 1
     assert amount == rocketNodeDeposit.getNodeEthBalance(node) - prev_rp_balance
     assert amount == prev_balance - rocketlend.borrowers(node).ETH
+
+# Full cycle tests
+## TODO
