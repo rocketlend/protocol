@@ -812,3 +812,38 @@ def test_distribute_rewards_two_MPs_from_other(rocketlend, nodeWithMPsJoined, ro
     assert all(minipool.balance == 0 for minipool in minipools)
     assert rocketlend.borrowers(node).ETH == logs[0].total
     assert prev_eth + logs[0].amount == logs[0].total
+
+@pytest.fixture()
+def distributedRewards(rocketlend, nodeWithMPsJoined, rocketMinipoolManager, Contract, minipoolABI, accounts):
+    node = nodeWithMPsJoined
+    minipool = None
+    index = 0
+    while minipool == None:
+        minipool = Contract(rocketMinipoolManager.getNodeMinipoolAt(node, index), abi=minipoolABI)
+        if (minipool.getStatus() != stakingStatus):
+            minipool = None
+            index += 1
+    accounts[1].transfer(minipool, 3 * 10 ** 18)
+    receipt = rocketlend.distributeMinipools(node, [minipool], True, sender=accounts[1])
+    return dict(rocketlend=rocketlend, node=node, minipool=minipool, receipt=receipt)
+
+def test_deposit_eth(distributedRewards, rocketNodeDeposit, accounts):
+    node = distributedRewards['node']
+    rocketlend = distributedRewards['rocketlend']
+    borrower = accounts[rocketlend.borrowers(node).address]
+    amount = 1 * 10 ** 18
+    prev_balance = rocketlend.borrowers(node).ETH
+    assert amount < prev_balance
+    prev_rp_balance = rocketNodeDeposit.getNodeEthBalance(node)
+    receipt = rocketlend.depositETH(node, amount, sender=borrower)
+    logs = rocketlend.DepositETH.from_receipt(receipt)
+    assert len(logs) == 1
+    assert amount == rocketNodeDeposit.getNodeEthBalance(node) - prev_rp_balance
+    assert amount == prev_balance - rocketlend.borrowers(node).ETH
+
+###
+
+# TODO: test distributing not just rewards
+# TODO: have someone else (not node) distribute rewards on a minipool via user distribute
+# TODO: use the above to test direct refunding afterwards
+
