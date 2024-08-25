@@ -384,6 +384,8 @@ def withdrawInterest(_poolId: bytes32, _amount: uint256, _andSupply: uint256):
   self.pools[_poolId].interestPaid -= _amount
   if _andSupply < _amount:
     assert extcall RPL.transfer(msg.sender, _amount - _andSupply), "t"
+  elif _andSupply > _amount:
+    assert extcall RPL.transferFrom(msg.sender, self, _andSupply - _amount), "tf"
   self.pools[_poolId].available += _andSupply
   log WithdrawInterest(_poolId, _amount, _andSupply, self.pools[_poolId].interestPaid, self.pools[_poolId].available)
 
