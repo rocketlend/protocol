@@ -63,6 +63,10 @@ def rocketRewardsPool(rocketStorage, Contract):
 def rocketMerkleDistributor(rocketStorage, Contract):
     return Contract(rocketStorage.getAddress(keccak('contract.addressrocketMerkleDistributorMainnet'.encode())))
 
+@pytest.fixture()
+def rocketNetworkPrices(rocketStorage, Contract):
+    return Contract(rocketStorage.getAddress(keccak('contract.addressrocketNetworkPrices'.encode())))
+
 def grab_RPL(who, amount, RPLToken, rocketVaultImpersonated, approveFor):
     RPLToken.transfer(who, amount, sender=rocketVaultImpersonated)
     if approveFor:
@@ -121,8 +125,10 @@ def node3(rocketNodeManager, accounts):
 
 @pytest.fixture()
 def nodeWithMPs(rocketNodeManager, rocketMinipoolManager, accounts):
-    nodeAddress = rocketNodeManager.getNodeAt(3000)
+    nodeAddress = rocketNodeManager.getNodeAt(252)
     node = accounts[nodeAddress]
+    if node.balance < 10 ** 18:
+      accounts[3].transfer(nodeAddress, '1 ETH')
     assert rocketMinipoolManager.getNodeActiveMinipoolCount(node) > 1
     return node
 
@@ -637,23 +643,111 @@ def test_withdraw_ether_from_pool_none(rocketlendp):
         rocketlend.withdrawEtherFromPool(poolId, 20, sender=lender)
 
 ### forceRepayRPL
-### forceRepayETH
 
-def test_force_repay_not_ended(rocketlendp, borrower1b):
+def test_force_repay_rpl_other(rocketlendp, borrower1b, other):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    node = borrower1b['node']
+    with reverts('revert: auth'):
+        rocketlend.forceRepayRPL(poolId, node, 123, sender=other)
+
+def test_force_repay_rpl_not_ended(rocketlendp, borrower1b):
     rocketlend = rocketlendp['rocketlend']
     poolId = rocketlendp['poolId']
     node = borrower1b['node']
     lender = rocketlendp['lender']
     with reverts('revert: term'):
         rocketlend.forceRepayRPL(poolId, node, 123, sender=lender)
+
+
+### forceRepayETH
+
+def test_force_repay_eth_other(rocketlendp, borrower1b, other):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    node = borrower1b['node']
+    with reverts('revert: auth'):
+        rocketlend.forceRepayETH(poolId, node, sender=other)
+
+def test_force_repay_eth_not_ended(rocketlendp, borrower1b):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    node = borrower1b['node']
+    lender = rocketlendp['lender']
     with reverts('revert: term'):
         rocketlend.forceRepayETH(poolId, node, sender=lender)
+
+def test_force_eth_repay_not_enought_eth(rocketlendp, distributedRewards, chain, rocketVaultImpersonated, lender2, RPLToken, accounts):
+    node = distributedRewards['node']
+    rocketlend = distributedRewards['rocketlend']
+    poolId = rocketlendp['poolId']
+    lender = rocketlendp['lender']
+    borrower = accounts[rocketlend.borrowers(node).address]
+    
+    amount = 250 * 10 ** RPLToken.decimals()
+    grab_RPL(lender2, amount, RPLToken, rocketVaultImpersonated, rocketlend)
+    rocketlend.supplyPool(poolId, amount, sender=lender2)
+    rocketlend.borrow(poolId, node, amount, sender=borrower)
+    
+    # wait for pool to end
+    chain.pending_timestamp += round(datetime.timedelta(weeks=2, days=1).total_seconds())
+
+    with reverts('revert: none'):
+        rocketlend.forceRepayETH(poolId, node, sender=lender) 
+
+def test_force_eth_repay(rocketlendp, distributedRewards, RPLToken, rocketVaultImpersonated, chain, accounts, rocketNetworkPrices):
+    node = distributedRewards['node']
+    rocketlend = distributedRewards['rocketlend']
+    poolId = rocketlendp['poolId']
+    lender = rocketlendp['lender']
+    borrower = accounts[rocketlend.borrowers(node).address]
+
+    amount = 50 * 10 ** RPLToken.decimals()
+    rocketlend.borrow(poolId, node, amount, sender=borrower)
+
+    # wait for pool to end
+    chain.pending_timestamp += round(datetime.timedelta(weeks=2, days=1).total_seconds())
+
+    # update interest to allow get_debt to be (mostly) accrate
+    grab_RPL(borrower, 1, RPLToken, rocketVaultImpersonated, rocketlend)
+    rocketlend.repay(poolId, node, 0, 1, sender=borrower)
+
+    prevEth = rocketlend.borrowers(node).ETH
+    prevDebt = get_debt(rocketlend, node)
+
+    rocketlend.forceRepayETH(poolId, node, sender=lender)
+
+    afterEth = rocketlend.borrowers(node).ETH
+    afterDebt = get_debt(rocketlend, node)
+
+    paidEth = prevEth - afterEth
+    assert rocketlend.pools(poolId).reclaimed == paidEth
+
+    paidRPL = (paidEth * 10 ** 18) // rocketNetworkPrices.getRPLPrice()
+    assert paidRPL * 0.99 <= prevDebt - afterDebt <= paidRPL * 1.01   
+
 
 ### forceClaimMerkleRewards
 #### TODO
 
 ### forceDistributeRefund
-#### TODO
+
+def test_force_distribute_refund_other(rocketlendp, borrower1b, other):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    node = borrower1b['node']
+    with reverts('revert: auth'):
+        rocketlend.forceDistributeRefund(poolId, node, False, [], False, [], sender=other)
+
+def test_force_distribute_refund_not_ended(rocketlendp, borrower1b):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    node = borrower1b['node']
+    lender = rocketlendp['lender']
+    with reverts('revert: term'):
+        rocketlend.forceDistributeRefund(poolId, node, False, [], False, [], sender=lender)
+
+#### TODO add good payout test
 
 ## Borrower actions
 
