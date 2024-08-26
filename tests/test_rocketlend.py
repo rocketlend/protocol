@@ -68,6 +68,9 @@ def grab_RPL(who, amount, RPLToken, rocketVaultImpersonated, approveFor):
     if approveFor:
         RPLToken.approve(approveFor, amount, sender=who)
 
+def get_debt(_rocketlend, _node):
+    return _rocketlend.borrowers(_node).borrowed + _rocketlend.borrowers(_node).interestDue
+
 ## Accounts
 
 @pytest.fixture()
@@ -1025,6 +1028,63 @@ def test_distribute_rewards_two_MPs_from_other(rocketlend, nodeWithMPsJoined, ro
 
 ### withdraw
 #### TODO
+
+def test_withdraw_other(rocketlendp, borrower1b, other):
+    rocketlend = rocketlendp['rocketlend']
+    node = borrower1b['node']
+    with reverts('revert: auth'):
+        rocketlend.withdraw(node, 1, 1, sender=other)
+
+def test_withdraw_RPL(rocketlendp, RPLToken, borrower1b, chain):
+    rocketlend = rocketlendp['rocketlend']
+    node = borrower1b['node']
+    borrower = borrower1b['borrower']
+
+    # increse RPL
+    chain.pending_timestamp += round(datetime.timedelta(days=90).total_seconds())
+    rocketlend.withdrawRPL(node, 100 * 10 ** 18, sender=borrower)
+    
+    debt = get_debt(rocketlend, node)
+    prevBalanceRPL = rocketlend.borrowers(node).RPL
+    prevBalanceETH = rocketlend.borrowers(node).ETH
+    userPrevBalanceRPL = RPLToken.balanceOf(borrower)
+    withdrawAmountRPL = prevBalanceRPL - debt
+    receipt = rocketlend.withdraw(node, withdrawAmountRPL, 0, sender=borrower)
+
+    afterBalanceRPL = rocketlend.borrowers(node).RPL
+    afterBalanceETH = rocketlend.borrowers(node).ETH
+    userAfterBalanceRPL = RPLToken.balanceOf(borrower)
+    assert userAfterBalanceRPL == userPrevBalanceRPL + withdrawAmountRPL
+
+    deltaBalance = prevBalanceRPL - afterBalanceRPL
+    assert deltaBalance == withdrawAmountRPL
+    assert prevBalanceETH == afterBalanceETH
+
+    logs = rocketlend.Withdraw.from_receipt(receipt)
+    assert len(logs) == 1
+
+    assert logs[0].node == node
+    assert logs[0].amountRPL == withdrawAmountRPL
+    assert logs[0].amountETH == 0
+    assert logs[0].totalRPL == prevBalanceRPL - withdrawAmountRPL
+    assert logs[0].totalETH == prevBalanceETH
+
+def test_withdraw_too_much_RPL(rocketlendp, borrower1b, chain):
+    rocketlend = rocketlendp['rocketlend']
+    node = borrower1b['node']
+    borrower = borrower1b['borrower']
+
+    # increse RPL
+    chain.pending_timestamp += round(datetime.timedelta(days=90).total_seconds())
+    rocketlend.withdrawRPL(node, 100 * 10 ** 18, sender=borrower)
+    
+    debt = get_debt(rocketlend, node)
+    prevBalanceRPL = rocketlend.borrowers(node).RPL
+    withdrawAmountRPL = prevBalanceRPL - debt + 1
+    
+    with reverts('revert: debt'):
+        rocketlend.withdraw(node, withdrawAmountRPL, 0, sender=borrower)
+
 
 ### depositETH
 
