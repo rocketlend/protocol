@@ -423,12 +423,12 @@ def forceRepayETH(_poolId: bytes32, _node: address):
   self._checkFromLender(_poolId)
   self._checkEndedOwing(_poolId, _node)
   ethPerRpl: uint256 = staticcall self._getRocketNetworkPrices().getRPLPrice()
-  startAmount: uint256 = self.borrowers[_node].ETH
-  amount: uint256 = startAmount - self._payDebt(_poolId, _node, startAmount // ethPerRpl) * ethPerRpl
-  assert 0 < amount, "none"
-  self.borrowers[_node].ETH -= amount
-  self.pools[_poolId].reclaimed += amount
-  log ForceRepayETH(_poolId, _node, amount, self.borrowers[_node].ETH, self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
+  startAmountETH: uint256 = self.borrowers[_node].ETH
+  endAmountETH: uint256 = (self._payDebt(_poolId, _node, (startAmountETH * oneEther) // ethPerRpl) * ethPerRpl) // oneEther
+  assert 0 < endAmountETH, "none"
+  self.borrowers[_node].ETH = endAmountETH
+  self.pools[_poolId].reclaimed += (startAmountETH - endAmountETH)
+  log ForceRepayETH(_poolId, _node, endAmountETH, self.borrowers[_node].ETH, self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
 
 @external
 def forceClaimMerkleRewards(
@@ -475,12 +475,12 @@ def forceDistributeRefund(_poolId: bytes32, _node: address,
   total += self._refundMinipools(_refundMinipools)
   assert 0 < total, "none"
   ethPerRpl: uint256 = staticcall self._getRocketNetworkPrices().getRPLPrice()
-  startAmount: uint256 = self.borrowers[_node].ETH
-  amount: uint256 = startAmount - self._payDebt(_poolId, _node, startAmount // ethPerRpl) * ethPerRpl
-  assert 0 < amount, "none"
-  self.borrowers[_node].ETH -= amount
-  self.pools[_poolId].reclaimed += amount
-  log ForceDistributeRefund(_poolId, _node, total, amount, self.borrowers[_node].ETH,
+  startAmountETH: uint256 = self.borrowers[_node].ETH
+  endAmountETH: uint256 = (self._payDebt(_poolId, _node, (startAmountETH * oneEther) // ethPerRpl) * ethPerRpl) // oneEther
+  assert 0 < endAmountETH, "none"
+  self.borrowers[_node].ETH = endAmountETH
+  self.pools[_poolId].reclaimed += (startAmountETH - endAmountETH)
+  log ForceDistributeRefund(_poolId, _node, total, endAmountETH, self.borrowers[_node].ETH,
                             self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
 
 @internal
