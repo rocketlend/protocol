@@ -1074,8 +1074,9 @@ def test_withdraw_too_much_RPL(rocketlendp, borrower1b, chain):
     node = borrower1b['node']
     borrower = borrower1b['borrower']
 
-    # increse RPL
+    # skip RP withdrawal cooldown period
     chain.pending_timestamp += round(datetime.timedelta(days=90).total_seconds())
+    # increase RPL held in rocketlend
     rocketlend.withdrawRPL(node, 100 * 10 ** 18, sender=borrower)
     
     debt = get_debt(rocketlend, node)
