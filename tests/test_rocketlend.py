@@ -659,6 +659,7 @@ def test_force_repay_rpl_not_ended(rocketlendp, borrower1b):
     with reverts('revert: term'):
         rocketlend.forceRepayRPL(poolId, node, 123, sender=lender)
 
+#### TODO add good repay test and validate amounts
 
 ### forceRepayETH
 
