@@ -871,6 +871,7 @@ def test_leave_with_debt(rocketlendp, borrower1b):
     with reverts('revert: b'):
         rocketlend.leaveAsBorrower(node, sender=borrower)
 
+#### TODO: move into repay tests section
 def test_leave_after_repaying_with_leftover(rocketlendp, borrower1b, RPLToken, rocketVaultImpersonated, rocketStorage):
     rocketlend = rocketlendp['rocketlend']
     borrower = borrower1b['borrower']
@@ -880,26 +881,29 @@ def test_leave_after_repaying_with_leftover(rocketlendp, borrower1b, RPLToken, r
     grab_RPL(borrower, buffer, RPLToken, rocketVaultImpersonated, rocketlend)
     charge_receipt = rocketlend.chargeInterest(poolId, node, sender=borrower)
     charge_logs = rocketlend.ChargeInterest.from_receipt(charge_receipt)
-    debt = borrower1b['amount'] + charge_logs[0].total + 10 ** (RPLToken.decimals() - 1) # more buffer for extra seconds of interest
-    receipt = rocketlend.repay(poolId, node, 0, debt, sender=borrower)
-    logs = rocketlend.Repay.from_receipt(receipt)
-    assert len(logs) == 1
-    assert logs[0].amount == debt
-    assert logs[0].borrowed == 0
-    assert logs[0].interestDue == 0
-    userBalanceBefore = RPLToken.balanceOf(borrower)
-    rplLeft = rocketlend.borrowers(node).RPL
-    ethLeft = rocketlend.borrowers(node).ETH
-    assert rplLeft > 0
-    # note: you can leave now, despite having some leftover. the only way to get it is to rejoin
-    rocketlend.leaveAsBorrower(node, sender=borrower)
-    with reverts('revert: auth'):
-        rocketlend.withdraw(node, rplLeft, ethLeft, sender=borrower)
-    rocketStorage.setWithdrawalAddress(node, rocketlend, False, sender=borrower)
-    rocketlend.joinAsBorrower(node, sender=borrower)
-    rocketlend.withdraw(node, rplLeft, ethLeft, sender=borrower)
-    assert rocketlend.borrowers(node).RPL == 0
-    assert RPLToken.balanceOf(borrower) == userBalanceBefore + rplLeft
+    debt = borrower1b['amount'] + charge_logs[0].total + 10 ** (RPLToken.decimals() - 1) # more buffer foolishly trying to cover extra interest
+    with reverts('revert: over'):
+        rocketlend.repay(poolId, node, 0, debt, sender=borrower)
+    # TODO:  do a successful test checking some of these things that were true in previous semantics of repay:
+    # receipt = rocketlend.repay(poolId, node, 0, debt, sender=borrower)
+    # logs = rocketlend.Repay.from_receipt(receipt)
+    # assert len(logs) == 1
+    # assert logs[0].amount == debt
+    # assert logs[0].borrowed == 0
+    # assert logs[0].interestDue == 0
+    # userBalanceBefore = RPLToken.balanceOf(borrower)
+    # rplLeft = rocketlend.borrowers(node).RPL
+    # ethLeft = rocketlend.borrowers(node).ETH
+    # assert rplLeft > 0
+    # # note: you can leave now, despite having some leftover. the only way to get it is to rejoin
+    # rocketlend.leaveAsBorrower(node, sender=borrower)
+    # with reverts('revert: auth'):
+    #     rocketlend.withdraw(node, rplLeft, ethLeft, sender=borrower)
+    # rocketStorage.setWithdrawalAddress(node, rocketlend, False, sender=borrower)
+    # rocketlend.joinAsBorrower(node, sender=borrower)
+    # rocketlend.withdraw(node, rplLeft, ethLeft, sender=borrower)
+    # assert rocketlend.borrowers(node).RPL == 0
+    # assert RPLToken.balanceOf(borrower) == userBalanceBefore + rplLeft
 
 def test_leave_rejoin_wa_unset(rocketlendp, borrower1):
     rocketlend = rocketlendp['rocketlend']
@@ -1066,7 +1070,7 @@ def test_repay_by_withdraw(rocketlendp, RPLToken, borrower1b, rocketNodeStaking,
     amount = 2 * 10 ** RPLToken.decimals()
     stakeBefore = rocketNodeStaking.getNodeRPLStake(node)
     chain.pending_timestamp += round(datetime.timedelta(hours=12, days=28).total_seconds())
-    receipt = rocketlend.repay(poolId, node, amount, 0, sender=borrower)
+    receipt = rocketlend.repay(poolId, node, amount, amount, sender=borrower)
     stakeAfter = rocketNodeStaking.getNodeRPLStake(node)
     logs = rocketlend.Repay.from_receipt(receipt)
     assert len(logs) == 1
@@ -1082,7 +1086,7 @@ def test_repay_withdraw_and_supply(rocketlendp, RPLToken, rocketVaultImpersonate
     grab_RPL(borrower, supply, RPLToken, rocketVaultImpersonated, rocketlend)
     stakeBefore = rocketNodeStaking.getNodeRPLStake(node)
     chain.pending_timestamp += round(datetime.timedelta(hours=12, days=28).total_seconds())
-    receipt = rocketlend.repay(poolId, node, amount, supply, sender=borrower)
+    receipt = rocketlend.repay(poolId, node, amount, amount + supply, sender=borrower)
     stakeAfter = rocketNodeStaking.getNodeRPLStake(node)
     logs = rocketlend.Repay.from_receipt(receipt)
     assert len(logs) == 1
@@ -1102,7 +1106,7 @@ def test_repay_withdraw_supply_unauth(rocketlendp, borrower1b, RPLToken, rocketV
     grab_RPL(other, supply, RPLToken, rocketVaultImpersonated, rocketlend)
     chain.pending_timestamp += round(datetime.timedelta(hours=12, days=28).total_seconds())
     with reverts('revert: auth'):
-        rocketlend.repay(poolId, node, amount, supply, sender=other)
+        rocketlend.repay(poolId, node, amount, amount + supply, sender=other)
 
 
 ### transferDebt

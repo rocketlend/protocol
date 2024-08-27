@@ -763,22 +763,26 @@ def borrow(_poolId: bytes32, _node: address, _amount: uint256):
              self.loans[_poolId][_node].interestDue)
 
 @external
-def repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: uint256):
-  assert _amount == 0 or msg.sender == self.borrowers[_node].address, "auth"
+def repay(_poolId: bytes32, _node: address, _withdrawAmount: uint256, _repayAmount: uint256):
+  isBorrower: bool = msg.sender == self.borrowers[_node].address
+  assert _withdrawAmount == 0 or isBorrower, "auth"
   self._chargeInterest(_poolId, _node)
   rocketNodeStaking: RocketNodeStakingInterface = self._getRocketNodeStaking()
-  available: uint256 = 0
-  if self.borrowers[_node].RPL < _amount:
-    extcall rocketNodeStaking.withdrawRPL(_node, _amount - self.borrowers[_node].RPL)
-    self.borrowers[_node].RPL = _amount
-  if 0 < _amount:
-    self.borrowers[_node].RPL -= _amount
-    available += _amount
-  if 0 < _amountSupplied:
-    assert extcall RPL.transferFrom(msg.sender, self, _amountSupplied), "tf"
-    available += _amountSupplied
-  self.borrowers[_node].RPL += self._payDebt(_poolId, _node, available)
-  log Repay(_poolId, _node, _amount + _amountSupplied,
+  if 0 < _withdrawAmount:
+    extcall rocketNodeStaking.withdrawRPL(_node, _withdrawAmount)
+    self.borrowers[_node].RPL += _withdrawAmount
+  target: uint256 = _repayAmount
+  if target == 0:
+    target = self.loans[_poolId][_node].interestDue + self.loans[_poolId][_node].borrowed
+  obtained: uint256 = 0
+  if isBorrower:
+    obtained = min(target, self.borrowers[_node].RPL)
+    self.borrowers[_node].RPL -= obtained
+  if obtained < target:
+    assert extcall RPL.transferFrom(msg.sender, self, target - obtained), "tf"
+    obtained = target
+  assert self._payDebt(_poolId, _node, obtained) == 0, "over"
+  log Repay(_poolId, _node, obtained,
             self.loans[_poolId][_node].borrowed,
             self.loans[_poolId][_node].interestDue)
 

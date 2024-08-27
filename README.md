@@ -218,7 +218,7 @@ Vyper), chosen to be large enough to be practically unlimited.
 - `setStakeRPLForAllowed(_node: address, _caller: address, _allowed: bool)`
 - `withdrawRPL(_node: address, _amount: uint256)`
 - `borrow(_poolId: bytes32, _node: address, _amount: uint256)`
-- `repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: uint256)`
+- `repay(_poolId: bytes32, _node: address, _withdrawAmount: uint256, _repayAmount: uint256)`
 - `transferDebt(_node: address, _fromPool: bytes32, _toPool: bytes32, _fromAvailable: uint256, _fromInterest: uint256, _fromAllowance: uint256)`
 - `claimMerkleRewards(_node: address, _rewardIndex: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountRPL: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountETH: DynArray[uint256, MAX_CLAIM_INTERVALS], _merkleProof: DynArray[DynArray[bytes32, MAX_PROOF_LENGTH], MAX_CLAIM_INTERVALS], _stakeAmount: uint256)`
 - `distribute(_node: address)`
