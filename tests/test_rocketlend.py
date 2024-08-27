@@ -671,17 +671,15 @@ def test_force_repay_eth_not_ended(rocketlendp, borrower1b):
     with reverts('revert: term'):
         rocketlend.forceRepayETH(poolId, node, sender=lender)
 
-def test_force_eth_repay_not_enought_eth(rocketlendp, distributedRewards, chain, rocketVaultImpersonated, lender2, RPLToken, accounts):
-    node = distributedRewards['node']
-    rocketlend = distributedRewards['rocketlend']
+def test_force_eth_repay_noOp(rocketlendp, borrower1b, chain, rocketVaultImpersonated, lender2, RPLToken, accounts):
+    node = borrower1b['node']
+    rocketlend = rocketlendp['rocketlend']
     poolId = rocketlendp['poolId']
     lender = rocketlendp['lender']
     borrower = accounts[rocketlend.borrowers(node).address]
-    
-    amount = 250 * 10 ** RPLToken.decimals()
-    grab_RPL(lender2, amount, RPLToken, rocketVaultImpersonated, rocketlend)
-    rocketlend.supplyPool(poolId, amount, sender=lender2)
-    rocketlend.borrow(poolId, node, amount, sender=borrower)
+
+    # borrower has no ETH in rocketlend
+    assert rocketlend.borrowers(node).ETH == 0    
     
     # wait for pool to end
     chain.pending_timestamp += round(datetime.timedelta(weeks=2, days=1).total_seconds())
