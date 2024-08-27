@@ -201,7 +201,7 @@ Vyper), chosen to be large enough to be practically unlimited.
 - `setAllowance(_poolId: bytes32, _amount: uint256)`
 - `changeAllowedToBorrow(_poolId: bytes32, _allowed: bool, _nodes: DynArray[address, MAX_ADDRESS_BATCH])`
 - `withdrawFromPool(_poolId: bytes32, _amount: uint256)`
-- `chargeInterest(_poolId: bytes32, _node: address)`: can be called by anyone
+- `updateInterestDue(_poolId: bytes32, _node: address)`: can be called by anyone
 - `withdrawInterest(_poolId: bytes32, _amount: uint256, _andSupply: uint256)`
 - `withdrawEtherFromPool(_poolId: bytes32, _amount: uint256)`
 - `forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256)`

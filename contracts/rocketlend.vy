@@ -386,7 +386,7 @@ def withdrawFromPool(_poolId: bytes32, _amount: uint256):
   log WithdrawFromPool(_poolId, _amount, self.pools[_poolId].available)
 
 @external
-def chargeInterest(_poolId: bytes32, _node: address):
+def updateInterestDue(_poolId: bytes32, _node: address):
   self._chargeInterest(_poolId, _node)
 
 @external

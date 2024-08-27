@@ -701,7 +701,7 @@ def test_force_eth_repay(rocketlendp, distributedRewards, RPLToken, rocketVaultI
     chain.pending_timestamp += round(datetime.timedelta(weeks=2, days=1).total_seconds())
 
     # update interest to allow get_debt to be (mostly) accrate
-    rocketlend.chargeInterest(poolId, node, sender=borrower)
+    rocketlend.updateInterestDue(poolId, node, sender=borrower)
 
     prevEth = rocketlend.borrowers(node).ETH
     prevDebt = get_debt(rocketlend, node)
@@ -879,7 +879,7 @@ def test_leave_after_repaying_with_leftover(rocketlendp, borrower1b, RPLToken, r
     poolId = borrower1b['poolId']
     buffer = get_debt(rocketlend, node) + 2 * 10 ** RPLToken.decimals() # add 2 RPL buffer for any extra interest
     grab_RPL(borrower, buffer, RPLToken, rocketVaultImpersonated, rocketlend)
-    charge_receipt = rocketlend.chargeInterest(poolId, node, sender=borrower)
+    charge_receipt = rocketlend.updateInterestDue(poolId, node, sender=borrower)
     charge_logs = rocketlend.ChargeInterest.from_receipt(charge_receipt)
     debt = borrower1b['amount'] + charge_logs[0].total + 10 ** (RPLToken.decimals() - 1) # more buffer foolishly trying to cover extra interest
     with reverts('revert: over'):
