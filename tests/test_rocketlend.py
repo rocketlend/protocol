@@ -679,13 +679,13 @@ def test_force_eth_repay_noOp(rocketlendp, borrower1b, chain, rocketVaultImperso
     borrower = accounts[rocketlend.borrowers(node).address]
 
     # borrower has no ETH in rocketlend
-    assert rocketlend.borrowers(node).ETH == 0    
-    
+    assert rocketlend.borrowers(node).ETH == 0
+
     # wait for pool to end
     chain.pending_timestamp += round(datetime.timedelta(weeks=2, days=1).total_seconds())
 
     with reverts('revert: none'):
-        rocketlend.forceRepayETH(poolId, node, sender=lender) 
+        rocketlend.forceRepayETH(poolId, node, sender=lender)
 
 def test_force_eth_repay(rocketlendp, distributedRewards, RPLToken, rocketVaultImpersonated, chain, accounts, rocketNetworkPrices):
     node = distributedRewards['node']
@@ -869,6 +869,25 @@ def test_leave_with_debt(rocketlendp, borrower1b):
     borrower = borrower1b['borrower']
     node = borrower1b['node']
     with reverts('revert: b'):
+        rocketlend.leaveAsBorrower(node, sender=borrower)
+
+def test_leave_with_active_loan(rocketlendp, borrower1b, RPLToken, rocketVaultImpersonated):
+    rocketlend = rocketlendp['rocketlend']
+    borrower = borrower1b['borrower']
+    node = borrower1b['node']
+    poolId = borrower1b['poolId']
+    buffer = get_debt(rocketlend, node) + 2 * 10 ** RPLToken.decimals() # add 2 RPL buffer for any extra interest
+    grab_RPL(borrower, buffer, RPLToken, rocketVaultImpersonated, rocketlend)
+    charge_receipt = rocketlend.chargeInterest(poolId, node, sender=borrower)
+    charge_logs = rocketlend.ChargeInterest.from_receipt(charge_receipt)
+    debt = borrower1b['amount'] + charge_logs[0].total + 10 ** (RPLToken.decimals() - 1) # more buffer for extra seconds of interest
+    receipt = rocketlend.repay(poolId, node, 0, debt, sender=borrower)
+    logs = rocketlend.Repay.from_receipt(receipt)
+    assert len(logs) == 1
+    assert logs[0].amount == debt
+    assert logs[0].borrowed == 0
+    assert logs[0].interestDue == 0
+    with reverts('revert: a'):
         rocketlend.leaveAsBorrower(node, sender=borrower)
 
 def test_leave_rejoin_wa_unset(rocketlendp, borrower1):
