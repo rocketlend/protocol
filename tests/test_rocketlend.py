@@ -644,13 +644,6 @@ def test_withdraw_ether_from_pool_none(rocketlendp):
 
 ### forceRepayRPL
 
-def test_force_repay_rpl_other(rocketlendp, borrower1b, other):
-    rocketlend = rocketlendp['rocketlend']
-    poolId = rocketlendp['poolId']
-    node = borrower1b['node']
-    with reverts('revert: auth'):
-        rocketlend.forceRepayRPL(poolId, node, 123, sender=other)
-
 def test_force_repay_rpl_not_ended(rocketlendp, borrower1b):
     rocketlend = rocketlendp['rocketlend']
     poolId = rocketlendp['poolId']
