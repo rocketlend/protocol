@@ -701,8 +701,7 @@ def test_force_eth_repay(rocketlendp, distributedRewards, RPLToken, rocketVaultI
     chain.pending_timestamp += round(datetime.timedelta(weeks=2, days=1).total_seconds())
 
     # update interest to allow get_debt to be (mostly) accrate
-    grab_RPL(borrower, 1, RPLToken, rocketVaultImpersonated, rocketlend)
-    rocketlend.repay(poolId, node, 0, 1, sender=borrower)
+    rocketlend.chargeInterest(poolId, node, sender=borrower)
 
     prevEth = rocketlend.borrowers(node).ETH
     prevDebt = get_debt(rocketlend, node)
@@ -716,7 +715,7 @@ def test_force_eth_repay(rocketlendp, distributedRewards, RPLToken, rocketVaultI
     assert rocketlend.pools(poolId).reclaimed == paidEth
 
     paidRPL = (paidEth * 10 ** 18) // rocketNetworkPrices.getRPLPrice()
-    assert paidRPL * 0.99 <= prevDebt - afterDebt <= paidRPL * 1.01   
+    assert paidRPL * 0.99 <= prevDebt - afterDebt <= paidRPL * 1.01
 
 
 ### forceClaimMerkleRewards

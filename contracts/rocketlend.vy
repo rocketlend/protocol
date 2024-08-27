@@ -283,6 +283,13 @@ event ForceDistributeRefund:
   borrowed: uint256
   interestDue: uint256
 
+event ChargeInterest:
+  id: indexed(bytes32)
+  node: indexed(address)
+  charged: uint256
+  total: uint256
+  until: uint256
+
 @external
 def registerLender() -> uint256:
   id: uint256 = self.nextLenderId
@@ -377,6 +384,10 @@ def withdrawFromPool(_poolId: bytes32, _amount: uint256):
   self.pools[_poolId].available -= _amount
   assert extcall RPL.transfer(msg.sender, _amount), "t"
   log WithdrawFromPool(_poolId, _amount, self.pools[_poolId].available)
+
+@external
+def chargeInterest(_poolId: bytes32, _node: address):
+  self._chargeInterest(_poolId, _node)
 
 @external
 def withdrawInterest(_poolId: bytes32, _amount: uint256, _andSupply: uint256):
@@ -681,6 +692,7 @@ def _chargeInterest(_poolId: bytes32, _node: address):
     self.loans[_poolId][_node].interestDue += amount
     self.borrowers[_node].interestDue += amount
   self.loans[_poolId][_node].startTime = block.timestamp
+  log ChargeInterest(_poolId, _node, amount, self.borrowers[_node].interestDue, block.timestamp)
 
 @internal
 def _repayInterest(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
