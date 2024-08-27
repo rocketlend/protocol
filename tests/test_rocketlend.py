@@ -206,7 +206,7 @@ def nodeWithMPsJoined(rocketlend, rocketStorage, other, nodeWithMPs, accounts):
     current_wa = accounts[rocketStorage.getNodeWithdrawalAddress(nodeWithMPs)]
     rocketStorage.setWithdrawalAddress(nodeWithMPs, rocketlend, False, sender=current_wa)
     rocketlend.joinAsBorrower(nodeWithMPs, sender=other)
-    return nodeWithMPs
+    return dict(node=nodeWithMPs, borrower=current_wa)
 
 ## Borrowing
 
@@ -238,7 +238,7 @@ def partialRepayment(borrower1b, other, RPLToken, rocketVaultImpersonated):
 
 @pytest.fixture()
 def distributedRewards(rocketlend, nodeWithMPsJoined, rocketMinipoolManager, Contract, minipoolABI, accounts):
-    node = nodeWithMPsJoined
+    node = nodeWithMPsJoined['node']
     minipool = None
     index = 0
     while minipool == None:
@@ -1114,7 +1114,7 @@ def test_repay_withdraw_supply_unauth(rocketlendp, borrower1b, RPLToken, rocketV
 ### distributeMinipools
 
 def test_distribute_rewards_two_MPs_from_other(rocketlend, nodeWithMPsJoined, rocketMinipoolManager, other, accounts, Contract, minipoolABI):
-    node = nodeWithMPsJoined
+    node = nodeWithMPsJoined['node']
     index = 0
     minipools = []
     while len(minipools) < 2:
@@ -1134,15 +1134,37 @@ def test_distribute_rewards_two_MPs_from_other(rocketlend, nodeWithMPsJoined, ro
     assert rocketlend.borrowers(node).ETH == logs[0].total
     assert prev_eth + logs[0].amount == logs[0].total
 
-#### TODO: test distributing not just rewards
-#### TODO: have someone else (not node) distribute rewards on a minipool via user distribute
-#### TODO: use the above to test direct refunding afterwards
+#### TODO: test distributing not just rewards: close a minipool and distribute (test from both rocketlend and other (then refund))
 
 ### refundMinipools
-#### TODO
+
+def test_other_distribute_minipool_then_refund(rocketlend, nodeWithMPsJoined, other, rocketMinipoolManager, Contract, minipoolABI):
+    node = nodeWithMPsJoined['node']
+    borrower = nodeWithMPsJoined['borrower']
+    index = 0
+    minipool = None
+    while not minipool:
+        minipool = Contract(rocketMinipoolManager.getNodeMinipoolAt(node, index), abi=minipoolABI)
+        if (minipool.getStatus() != stakingStatus):
+            minipool = None
+        index += 1
+    other.transfer(minipool, 89 * 10 ** 16) # some fake consensus rewards into the minipool, < 1 ETH
+    assert minipool.balance > 0
+    minipool.distributeBalance(True, sender=other)
+    refundBalance = minipool.getNodeRefundBalance()
+    assert minipool.balance == refundBalance
+    with reverts('revert: auth'):
+        rocketlend.refundMinipools(node, [minipool], sender=other)
+    prevBorrowerETH = rocketlend.borrowers(node).ETH
+    receipt = rocketlend.refundMinipools(node, [minipool], sender=borrower)
+    logs = rocketlend.RefundMinipools.from_receipt(receipt)
+    assert len(logs) == 1
+    assert minipool.balance == 0
+    assert rocketlend.borrowers(node).ETH == prevBorrowerETH + refundBalance
+
+#### TODO: test multiple minipools refund
 
 ### withdraw
-#### TODO
 
 def test_withdraw_other(rocketlendp, borrower1b, other):
     rocketlend = rocketlendp['rocketlend']
@@ -1206,6 +1228,7 @@ def test_withdraw_too_much_RPL(rocketlendp, borrower1b, chain):
     with reverts('revert: debt'):
         rocketlend.withdraw(node, withdrawAmountRPL, 0, sender=borrower)
 
+#### TODO: test withdrawing ETH
 
 ### depositETH
 
