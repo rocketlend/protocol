@@ -871,7 +871,7 @@ def test_leave_with_debt(rocketlendp, borrower1b):
     with reverts('revert: b'):
         rocketlend.leaveAsBorrower(node, sender=borrower)
 
-def test_leave_after_repaying_with_leftover(rocketlendp, borrower1b, RPLToken, rocketVaultImpersonated):
+def test_leave_after_repaying_with_leftover(rocketlendp, borrower1b, RPLToken, rocketVaultImpersonated, rocketStorage):
     rocketlend = rocketlendp['rocketlend']
     borrower = borrower1b['borrower']
     node = borrower1b['node']
@@ -887,10 +887,19 @@ def test_leave_after_repaying_with_leftover(rocketlendp, borrower1b, RPLToken, r
     assert logs[0].amount == debt
     assert logs[0].borrowed == 0
     assert logs[0].interestDue == 0
-    assert rocketlend.borrowers(node).RPL > 0
+    userBalanceBefore = RPLToken.balanceOf(borrower)
+    rplLeft = rocketlend.borrowers(node).RPL
+    ethLeft = rocketlend.borrowers(node).ETH
+    assert rplLeft > 0
     # note: you can leave now, despite having some leftover. the only way to get it is to rejoin
     rocketlend.leaveAsBorrower(node, sender=borrower)
-    # TODO: test rejoining and withdrawing
+    with reverts('revert: auth'):
+        rocketlend.withdraw(node, rplLeft, ethLeft, sender=borrower)
+    rocketStorage.setWithdrawalAddress(node, rocketlend, False, sender=borrower)
+    rocketlend.joinAsBorrower(node, sender=borrower)
+    rocketlend.withdraw(node, rplLeft, ethLeft, sender=borrower)
+    assert rocketlend.borrowers(node).RPL == 0
+    assert RPLToken.balanceOf(borrower) == userBalanceBefore + rplLeft
 
 def test_leave_rejoin_wa_unset(rocketlendp, borrower1):
     rocketlend = rocketlendp['rocketlend']
