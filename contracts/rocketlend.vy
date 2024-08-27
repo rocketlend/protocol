@@ -777,7 +777,7 @@ def repay(_poolId: bytes32, _node: address, _amount: uint256, _amountSupplied: u
   if 0 < _amountSupplied:
     assert extcall RPL.transferFrom(msg.sender, self, _amountSupplied), "tf"
     available += _amountSupplied
-  assert self._payDebt(_poolId, _node, available) == 0, "bal"
+  self.borrowers[_node].RPL += self._payDebt(_poolId, _node, available)
   log Repay(_poolId, _node, _amount + _amountSupplied,
             self.loans[_poolId][_node].borrowed,
             self.loans[_poolId][_node].interestDue)
