@@ -425,10 +425,11 @@ def forceRepayETH(_poolId: bytes32, _node: address):
   ethPerRpl: uint256 = staticcall self._getRocketNetworkPrices().getRPLPrice()
   startAmountETH: uint256 = self.borrowers[_node].ETH
   endAmountETH: uint256 = (self._payDebt(_poolId, _node, (startAmountETH * oneEther) // ethPerRpl) * ethPerRpl) // oneEther
-  assert 0 < endAmountETH, "none"
+  reclaimedETH: uint256 = startAmountETH - endAmountETH
+  assert 0 < reclaimedETH, "none"
   self.borrowers[_node].ETH = endAmountETH
-  self.pools[_poolId].reclaimed += (startAmountETH - endAmountETH)
-  log ForceRepayETH(_poolId, _node, endAmountETH, self.borrowers[_node].ETH, self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
+  self.pools[_poolId].reclaimed += reclaimedETH
+  log ForceRepayETH(_poolId, _node, reclaimedETH, self.borrowers[_node].ETH, self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
 
 @external
 def forceClaimMerkleRewards(
@@ -477,10 +478,12 @@ def forceDistributeRefund(_poolId: bytes32, _node: address,
   ethPerRpl: uint256 = staticcall self._getRocketNetworkPrices().getRPLPrice()
   startAmountETH: uint256 = self.borrowers[_node].ETH
   endAmountETH: uint256 = (self._payDebt(_poolId, _node, (startAmountETH * oneEther) // ethPerRpl) * ethPerRpl) // oneEther
-  assert 0 < endAmountETH, "none"
+
+  reclaimedETH: uint256 = startAmountETH - endAmountETH
+  assert 0 < reclaimedETH, "none"
   self.borrowers[_node].ETH = endAmountETH
-  self.pools[_poolId].reclaimed += (startAmountETH - endAmountETH)
-  log ForceDistributeRefund(_poolId, _node, total, endAmountETH, self.borrowers[_node].ETH,
+  self.pools[_poolId].reclaimed += reclaimedETH
+  log ForceDistributeRefund(_poolId, _node, total, reclaimedETH, self.borrowers[_node].ETH,
                             self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
 
 @internal
