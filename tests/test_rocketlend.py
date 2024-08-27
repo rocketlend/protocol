@@ -1040,12 +1040,15 @@ def test_withdraw_RPL(rocketlendp, RPLToken, borrower1b, chain):
     node = borrower1b['node']
     borrower = borrower1b['borrower']
 
-    # increse RPL
+    # skip RP withdrawal cooldown period
     chain.pending_timestamp += round(datetime.timedelta(days=90).total_seconds())
-    rocketlend.withdrawRPL(node, 100 * 10 ** 18, sender=borrower)
-    
+    # increase RPL held in rocketlend
+    amountBorrowed = borrower1b['amount']
+    rocketlend.withdrawRPL(node, amountBorrowed, sender=borrower)
+
     debt = get_debt(rocketlend, node)
     prevBalanceRPL = rocketlend.borrowers(node).RPL
+    assert debt <= prevBalanceRPL
     prevBalanceETH = rocketlend.borrowers(node).ETH
     userPrevBalanceRPL = RPLToken.balanceOf(borrower)
     withdrawAmountRPL = prevBalanceRPL - debt
@@ -1077,12 +1080,14 @@ def test_withdraw_too_much_RPL(rocketlendp, borrower1b, chain):
     # skip RP withdrawal cooldown period
     chain.pending_timestamp += round(datetime.timedelta(days=90).total_seconds())
     # increase RPL held in rocketlend
-    rocketlend.withdrawRPL(node, 100 * 10 ** 18, sender=borrower)
-    
+    amountBorrowed = borrower1b['amount']
+    rocketlend.withdrawRPL(node, amountBorrowed, sender=borrower)
+
     debt = get_debt(rocketlend, node)
     prevBalanceRPL = rocketlend.borrowers(node).RPL
+    assert debt <= prevBalanceRPL
     withdrawAmountRPL = prevBalanceRPL - debt + 1
-    
+
     with reverts('revert: debt'):
         rocketlend.withdraw(node, withdrawAmountRPL, 0, sender=borrower)
 
