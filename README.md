@@ -125,7 +125,8 @@ Lenders can use the Rocket Lend contract to:
   party on the lender's behalf
 - Set the allowance for transfers of debt into one of their lending pools from
   their other lending pools
-- Withdraw RPL that is not currently borrowed from one of their lending pools
+- Withdraw RPL that is not currently borrowed, and/or ETH that was reclaimed
+  from a default, from one of their lending pools
 - Withdraw any interest paid to one of their lending pools, and optionally
   supply it back to the pool
 - Withdraw any remaining debt (borrowed RPL plus interest) from a node after
@@ -200,10 +201,9 @@ Vyper), chosen to be large enough to be practically unlimited.
 - `supplyPool(_poolId: bytes32, _amount: uint256)`
 - `setAllowance(_poolId: bytes32, _amount: uint256)`
 - `changeAllowedToBorrow(_poolId: bytes32, _allowed: bool, _nodes: DynArray[address, MAX_ADDRESS_BATCH])`
-- `withdrawFromPool(_poolId: bytes32, _amount: uint256)`
+- `withdrawFromPool(_poolId: bytes32, _amountRPL: uint256, _amountETH: uint256)`
 - `updateInterestDue(_poolId: bytes32, _node: address)`: can be called by anyone
 - `withdrawInterest(_poolId: bytes32, _amount: uint256, _andSupply: uint256)`
-- `withdrawEtherFromPool(_poolId: bytes32, _amount: uint256)`
 - `forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256)`
 - `forceRepayETH(_poolId: bytes32, _node: address)`
 - `forceClaimMerkleRewards(_poolId: bytes32, _node: address, _repayRPL: uint256, _repayETH: uint256, _rewardIndex: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountRPL: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountETH: DynArray[uint256, MAX_CLAIM_INTERVALS], _merkleProof: DynArray[DynArray[bytes32, MAX_PROOF_LENGTH], MAX_CLAIM_INTERVALS])`
@@ -253,8 +253,8 @@ Vyper), chosen to be large enough to be practically unlimited.
     - `nodes: DynArray[address, MAX_ADDRESS_BATCH]`
 - `WithdrawFromPool`
     - `id: indexed(bytes32)`
-    - `amount: indexed(uint256)`
-    - `total: indexed(uint256)`
+    - `amountRPL: indexed(uint256)`
+    - `amountETH: indexed(uint256)`
 - `ChargeInterest`
     - `id: indexed(bytes32)`
     - `node: indexed(address)`
@@ -267,10 +267,6 @@ Vyper), chosen to be large enough to be practically unlimited.
     - `supplied: indexed(uint256)`
     - `interestPaid: uint256`
     - `available: uint256`
-- `WithdrawEtherFromPool`
-    - `id: indexed(bytes32)`
-    - `amount: indexed(uint256)`
-    - `total: indexed(uint256)`
 - `ForceRepayRPL`
     - `id: indexed(bytes32)`
     - `node: indexed(address)`

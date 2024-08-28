@@ -519,7 +519,7 @@ def test_withdraw_other(rocketlendp, other):
     poolId = rocketlendp['poolId']
     amount = rocketlendp['amount'] // 2
     with reverts('revert: auth'):
-        rocketlend.withdrawFromPool(poolId, amount, sender=other)
+        rocketlend.withdrawFromPool(poolId, amount, 0, sender=other)
 
 def test_withdraw_unborrowed(rocketlendp, RPLToken):
     rocketlend = rocketlendp['rocketlend']
@@ -527,13 +527,29 @@ def test_withdraw_unborrowed(rocketlendp, RPLToken):
     lender = rocketlendp['lender']
     amount = rocketlendp['amount']
     before = RPLToken.balanceOf(lender)
-    receipt = rocketlend.withdrawFromPool(poolId, amount // 3, sender=lender)
+    receipt = rocketlend.withdrawFromPool(poolId, amount // 3, 0, sender=lender)
     after = RPLToken.balanceOf(lender)
     logs = rocketlend.WithdrawFromPool.from_receipt(receipt)
     assert len(logs) == 1
-    assert logs[0].amount == after - before
-    assert logs[0].total == amount - logs[0].amount
-    assert rocketlend.pools(poolId).available == logs[0].total
+    assert logs[0].amountRPL == after - before
+    assert rocketlend.pools(poolId).available == amount - logs[0].amountRPL
+
+def test_withdraw_ether_from_pool_other(rocketlendp, other):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    with reverts('revert: auth'):
+        rocketlend.withdrawFromPool(poolId, 0, 20, sender=other)
+
+def test_withdraw_ether_from_pool_none(rocketlendp):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    lender = rocketlendp['lender']
+    assert rocketlend.pools(poolId).reclaimed == 0
+    with reverts('Integer underflow'):
+        rocketlend.withdrawFromPool(poolId, 0, 20, sender=lender)
+
+#### TODO: successful withdraw of ETH
+#### TODO: test withdrawing both RPL and ETH simultaneously
 
 ### withdrawInterest
 
@@ -625,22 +641,6 @@ def test_withdraw_interest_and_supply_more(partialRepayment, RPLToken, rocketVau
     assert RPLToken.balanceOf(lender) == balanceBefore + paidBefore - supplyAmount
     assert logs[0].available == supplyBefore + supplyAmount
     assert rocketlend.pools(poolId).interestPaid == logs[0].interestPaid
-
-### withdrawEtherFromPool
-
-def test_withdraw_ether_from_pool_other(rocketlendp, other):
-    rocketlend = rocketlendp['rocketlend']
-    poolId = rocketlendp['poolId']
-    with reverts('revert: auth'):
-        rocketlend.withdrawEtherFromPool(poolId, 20, sender=other)
-
-def test_withdraw_ether_from_pool_none(rocketlendp):
-    rocketlend = rocketlendp['rocketlend']
-    poolId = rocketlendp['poolId']
-    lender = rocketlendp['lender']
-    assert rocketlend.pools(poolId).reclaimed == 0
-    with reverts('Integer underflow'):
-        rocketlend.withdrawEtherFromPool(poolId, 20, sender=lender)
 
 ### forceRepayRPL
 

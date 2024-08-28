@@ -231,8 +231,8 @@ event ChangeAllowedToBorrow:
 
 event WithdrawFromPool:
   id: indexed(bytes32)
-  amount: indexed(uint256)
-  total: indexed(uint256)
+  amountRPL: indexed(uint256)
+  amountETH: indexed(uint256)
 
 event WithdrawInterest:
   id: indexed(bytes32)
@@ -240,11 +240,6 @@ event WithdrawInterest:
   supplied: indexed(uint256)
   interestPaid: uint256
   available: uint256
-
-event WithdrawEtherFromPool:
-  id: indexed(bytes32)
-  amount: indexed(uint256)
-  total: indexed(uint256)
 
 event ForceRepayRPL:
   id: indexed(bytes32)
@@ -379,11 +374,15 @@ def changeAllowedToBorrow(_poolId: bytes32, _allowed: bool, _nodes: DynArray[add
   log ChangeAllowedToBorrow(_poolId, _allowed, _nodes)
 
 @external
-def withdrawFromPool(_poolId: bytes32, _amount: uint256):
+def withdrawFromPool(_poolId: bytes32, _amountRPL: uint256, _amountETH: uint256):
   self._checkFromLender(_poolId)
-  self.pools[_poolId].available -= _amount
-  assert extcall RPL.transfer(msg.sender, _amount), "t"
-  log WithdrawFromPool(_poolId, _amount, self.pools[_poolId].available)
+  if 0 < _amountRPL:
+    self.pools[_poolId].available -= _amountRPL
+    assert extcall RPL.transfer(msg.sender, _amountRPL), "t"
+  if 0 < _amountETH:
+    self.pools[_poolId].reclaimed -= _amountETH
+    send(msg.sender, _amountETH, gas=msg.gas)
+  log WithdrawFromPool(_poolId, _amountRPL, _amountETH)
 
 @external
 def updateInterestDue(_poolId: bytes32, _node: address):
@@ -399,13 +398,6 @@ def withdrawInterest(_poolId: bytes32, _amount: uint256, _andSupply: uint256):
     assert extcall RPL.transferFrom(msg.sender, self, _andSupply - _amount), "tf"
   self.pools[_poolId].available += _andSupply
   log WithdrawInterest(_poolId, _amount, _andSupply, self.pools[_poolId].interestPaid, self.pools[_poolId].available)
-
-@external
-def withdrawEtherFromPool(_poolId: bytes32, _amount: uint256):
-  self._checkFromLender(_poolId)
-  self.pools[_poolId].reclaimed -= _amount
-  send(msg.sender, _amount, gas=msg.gas)
-  log WithdrawEtherFromPool(_poolId, _amount, self.pools[_poolId].reclaimed)
 
 @internal
 def _checkEndedOwing(_poolId: bytes32, _node: address):
