@@ -167,8 +167,8 @@ allowedToBorrow: public(HashMap[bytes32, HashMap[address, bool]])
 
 struct LoanState:
   borrowed: uint256 # RPL currently borrowed
-  startTime: uint256 # start time for ongoing interest accumulation on borrowed
   interestDue: uint256 # interest already accumulated (and not yet paid)
+  accountedUntil: uint256 # start time for ongoing interest accumulation on borrowed
 
 loans: public(HashMap[bytes32, HashMap[address, LoanState]])
 
@@ -403,7 +403,7 @@ def withdrawInterest(_poolId: bytes32, _amount: uint256, _andSupply: uint256):
 def _checkEndedOwing(_poolId: bytes32, _node: address):
   endTime: uint256 = self.params[_poolId].endTime
   assert endTime < block.timestamp, "term"
-  if self.loans[_poolId][_node].startTime < endTime:
+  if self.loans[_poolId][_node].accountedUntil < endTime:
     self._chargeInterest(_poolId, _node)
   assert 0 < self.loans[_poolId][_node].borrowed or 0 < self.loans[_poolId][_node].interestDue, "paid"
 
@@ -669,7 +669,7 @@ def _outstandingInterest(_borrowed: uint256, _rate: uint8, _startTime: uint256, 
 @internal
 def _chargeInterest(_poolId: bytes32, _node: address):
   borrowed: uint256 = self.loans[_poolId][_node].borrowed
-  startTime: uint256 = self.loans[_poolId][_node].startTime
+  startTime: uint256 = self.loans[_poolId][_node].accountedUntil
   endTime: uint256 = self.params[_poolId].endTime
   rate: uint8 = self.params[_poolId].interestRate
   amount: uint256 = empty(uint256)
@@ -683,7 +683,7 @@ def _chargeInterest(_poolId: bytes32, _node: address):
   if 0 < amount:
     self.loans[_poolId][_node].interestDue += amount
     self.borrowers[_node].interestDue += amount
-  self.loans[_poolId][_node].startTime = block.timestamp
+  self.loans[_poolId][_node].accountedUntil = block.timestamp
   log ChargeInterest(_poolId, _node, amount, self.borrowers[_node].interestDue, block.timestamp)
 
 @internal

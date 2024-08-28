@@ -168,8 +168,8 @@ Vyper), chosen to be large enough to be practically unlimited.
 
 - `LoanState` (per pool id and node (borrower))
   - `borrowed: uint256`: amount of RPL currently borrowed in this loan
-  - `startTime: uint256`: start time for ongoing interest accumulation on the `borrowed` amount
-  - `interestDue: uint256`: interest due (accrued before `startTime`) but not yet paid by the borrower
+  - `interestDue: uint256`: interest due (accrued before `accountedUntil`) but not yet paid by the borrower
+  - `accountedUntil: uint256`: start time for ongoing interest accumulation on the `borrowed` amount
 
 - `BorrowerState` (per node)
   - `borrowed: uint256`: total RPL borrowed
