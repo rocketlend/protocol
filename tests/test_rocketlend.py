@@ -784,6 +784,24 @@ def test_change_borrower_to_other_force(borrower1, other):
     assert len(logs) == 1
     assert logs[0].new == other
 
+def test_change_borrower_2_step_leave_early(rocketlendp, rocketStorage, borrower1, other):
+    rocketlend = rocketlendp['rocketlend']
+    borrower = borrower1['borrower']
+    node = borrower1['node']
+
+    # start 2-step borrower address change
+    rocketlend.changeBorrowerAddress(node, other, False, sender=borrower)
+
+    rocketlend.leaveAsBorrower(node, sender=borrower)
+
+    # withdraw address was changed back to borrower
+    assert rocketStorage.getNodeWithdrawalAddress(node) == borrower
+
+    # accept the change
+    with reverts('revert: auth'):
+        rocketlend.confirmChangeBorrowerAddress(node, sender=other)
+
+
 ### joinAsBorrower
 
 def test_join_protocol_wrong_pending(rocketlendp, node1):
