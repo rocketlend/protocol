@@ -539,16 +539,7 @@ event TransferDebt:
   interestDue: uint256
   allowance: uint256
 
-event Distribute:
-  node: indexed(address)
-  amount: indexed(uint256)
-
-event DistributeMinipools:
-  node: indexed(address)
-  amount: indexed(uint256)
-  total: indexed(uint256)
-
-event RefundMinipools:
+event DistributeRefund:
   node: indexed(address)
   amount: indexed(uint256)
   total: indexed(uint256)
@@ -867,11 +858,6 @@ def _distribute(_node: address) -> uint256:
   assert amount + nodeShare == self.balance, "bal"
   return nodeShare
 
-@external
-def distribute(_node: address):
-  self._checkFromBorrower(_node)
-  log Distribute(_node, self._distribute(_node))
-
 @internal
 def _distributeMinipools(_minipools: DynArray[address, MAX_NODE_MINIPOOLS], _rewardsOnly: bool) -> uint256:
   balance: uint256 = self.balance
@@ -891,19 +877,20 @@ def _refundMinipools(_minipools: DynArray[address, MAX_NODE_MINIPOOLS]) -> uint2
   return self.balance - balance
 
 @external
-def distributeMinipools(_node: address, _minipools: DynArray[address, MAX_NODE_MINIPOOLS], _rewardsOnly: bool):
-  if not _rewardsOnly:
+def distributeRefund(_node: address,
+                     _distribute: bool,
+                     _distributeMinipools: DynArray[address, MAX_NODE_MINIPOOLS],
+                     _rewardsOnly: bool,
+                     _refundMinipools: DynArray[address, MAX_NODE_MINIPOOLS]):
+  if not _rewardsOnly or 0 < len(_refundMinipools):
     self._checkFromBorrower(_node)
-  distributed: uint256 = self._distributeMinipools(_minipools, _rewardsOnly)
-  self.borrowers[_node].ETH += distributed
-  log DistributeMinipools(_node, distributed, self.borrowers[_node].ETH)
-
-@external
-def refundMinipools(_node: address, _minipools: DynArray[address, MAX_NODE_MINIPOOLS]):
-  self._checkFromBorrower(_node)
-  refunded: uint256 = self._refundMinipools(_minipools)
-  self.borrowers[_node].ETH += refunded
-  log RefundMinipools(_node, refunded, self.borrowers[_node].ETH)
+  total: uint256 = 0
+  if _distribute:
+    total += self._distribute(_node)
+  total += self._distributeMinipools(_distributeMinipools, _rewardsOnly)
+  total += self._refundMinipools(_refundMinipools)
+  self.borrowers[_node].ETH += total
+  log DistributeRefund(_node, total, self.borrowers[_node].ETH)
 
 @external
 def withdraw(_node: address, _amountRPL: uint256, _amountETH: uint256):
