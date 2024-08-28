@@ -1136,17 +1136,19 @@ def test_distribute_rewards_two_MPs_from_other(rocketlend, nodeWithMPsJoined, ro
     node = nodeWithMPsJoined['node']
     index = 0
     minipools = []
+    indices = []
     while len(minipools) < 2:
         minipool = Contract(rocketMinipoolManager.getNodeMinipoolAt(node, index), abi=minipoolABI)
         if (minipool.getStatus() == stakingStatus):
             minipools.append(minipool)
+            indices.append(index)
         index += 1
     index = 2
     for minipool in minipools:
         accounts[1].transfer(minipool, index * 10 ** 18)
         index -= 1
     prev_eth = rocketlend.borrowers(node).ETH
-    receipt = rocketlend.distributeRefund(node, False, minipools, True, [], sender=other)
+    receipt = rocketlend.distributeRefund(node, False, indices, True, [], sender=other)
     logs = rocketlend.DistributeRefund.from_receipt(receipt)
     assert len(logs) == 1
     assert all(minipool.balance == 0 for minipool in minipools)
@@ -1164,16 +1166,16 @@ def test_other_distribute_minipool_then_refund(rocketlend, nodeWithMPsJoined, ot
         minipool = Contract(rocketMinipoolManager.getNodeMinipoolAt(node, index), abi=minipoolABI)
         if (minipool.getStatus() != stakingStatus):
             minipool = None
-        index += 1
+            index += 1
     other.transfer(minipool, 89 * 10 ** 16) # some fake consensus rewards into the minipool, < 1 ETH
     assert minipool.balance > 0
     minipool.distributeBalance(True, sender=other)
     refundBalance = minipool.getNodeRefundBalance()
     assert minipool.balance == refundBalance
     with reverts('revert: auth'):
-        rocketlend.distributeRefund(node, False, [], True, [minipool], sender=other)
+        rocketlend.distributeRefund(node, False, [], True, [index], sender=other)
     prevBorrowerETH = rocketlend.borrowers(node).ETH
-    receipt = rocketlend.distributeRefund(node, False, [], True, [minipool], sender=borrower)
+    receipt = rocketlend.distributeRefund(node, False, [], True, [index], sender=borrower)
     logs = rocketlend.DistributeRefund.from_receipt(receipt)
     assert len(logs) == 1
     assert minipool.balance == 0
