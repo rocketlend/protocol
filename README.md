@@ -129,8 +129,9 @@ Lenders can use the Rocket Lend contract to:
   from a default, from one of their lending pools
 - Withdraw any interest paid to one of their lending pools, and optionally
   supply it back to the pool
-- Withdraw any remaining debt (borrowed RPL plus interest) from a node after
-  the end time of the lending pool
+- Withdraw any remaining defaulted debt (borrowed RPL plus interest) from a
+  node after the end time of the lending pool, as long as the RPL is
+  withdrawable from Rocket Pool
 - Force a claim/withdrawal of ETH or RPL from the node of a borrower that has
   defaulted on a loan from one of the lender's pools, up to the outstanding
   debt amount
