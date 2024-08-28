@@ -634,6 +634,7 @@ def leaveAsBorrower(_node: address):
   extcall rocketStorage.setWithdrawalAddress(_node, msg.sender, True)
   extcall self._getRocketNodeManager().unsetRPLWithdrawalAddress(_node)
   self.borrowers[_node].address = empty(address)
+  self.borrowers[_node].pending = empty(address)
   log LeaveProtocol(_node)
 
 @internal
