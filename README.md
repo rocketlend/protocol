@@ -21,13 +21,13 @@ protocol, and "borrowers" who borrow RPL from the protocol to stake on Rocket
 Pool nodes.
 
 A lender is assigned a unique identifier when they register with Rocket Lend.
-They provide an address to which funds from Rocket Lend will be sent, which can
-be changed.
+They provide an address (their "lender address") to which funds from Rocket
+Lend will be sent, which can be changed.
 
 A borrower is identified by the address of the Rocket Pool node they are
-borrowing for. They also provide an address to Rocket Lend (initially the
-node's withdrawal address before Rocket Lend), which can be changed, to which
-their funds are ultimately sent.
+borrowing for. They also provide an address (their "borrower address") to
+Rocket Lend (initially the node's withdrawal address before Rocket Lend), which
+can be changed, to which their funds are ultimately sent.
 
 ### Lending Pools
 
@@ -116,8 +116,8 @@ remains below 100% of the borrower's available ETH.
 Lenders can use the Rocket Lend contract to:
 
 - Register as a lender in the protocol by claiming a new identifier
-- Transfer control (ownership of funds) of their lender identifier to a new
-  address
+- Change their lender address, i.e., transfer control (ownership of funds) of
+  their lender identifier to a new address
 - Create a new lending pool with their chosen parameters
 - Restrict or expand the set of borrowers that are allowed to borrow RPL from
   one of their lending pools
@@ -177,7 +177,7 @@ Vyper), chosen to be large enough to be practically unlimited.
   - `RPL: uint256`: amount of RPL available for (with priority) debt repayments or to be withdrawn
   - `ETH: uint256`: amount of ETH available for (with priority) debt repayments on liquidation or to be withdrawn
   - `index: uint256`: first not-yet-accounted-for Rocket Pool rewards interval index
-  - `address: address`: current (Rocket Lend) withdrawal address for the borrower
+  - `address: address`: current (Rocket Lend) borrower address
   - `pending: address`: pending address used when changing the borrower address
 
 ### Views
