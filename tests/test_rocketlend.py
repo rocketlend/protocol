@@ -391,7 +391,7 @@ def test_change_lender_address(rocketlendReg1, lender1, other):
     receipt = rocketlend.confirmChangeLenderAddress(lenderId, sender=other)
     assert rocketlend.lenderAddress(lenderId) == other
     assert rocketlend.pendingLenderAddress(lenderId) == nullAddress
-    logs = rocketlend.UpdateLender.from_receipt(receipt)
+    logs = rocketlend.ConfirmChangeLenderAddress.from_receipt(receipt)
     assert len(logs) == 1
 
 def test_change_lender_address_force(rocketlendReg1, lender1, other):

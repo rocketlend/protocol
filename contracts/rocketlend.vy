@@ -216,10 +216,16 @@ event RegisterLender:
   id: indexed(uint256)
   address: indexed(address)
 
-event UpdateLender:
+event PendingChangeLenderAddress:
   id: indexed(uint256)
   old: indexed(address)
   new: indexed(address)
+
+event ConfirmChangeLenderAddress:
+  id: indexed(uint256)
+  old: indexed(address)
+  new: indexed(address)
+  oldPending: address
 
 event CreatePool:
   id: indexed(bytes32)
@@ -306,8 +312,8 @@ def registerLender() -> uint256:
 
 @internal
 def _updateLenderAddress(_lender: uint256, _newAddress: address):
+  log ConfirmChangeLenderAddress(_lender, self.lenderAddress[_lender], _newAddress, self.pendingLenderAddress[_lender])
   self.pendingLenderAddress[_lender] = empty(address)
-  log UpdateLender(_lender, self.lenderAddress[_lender], _newAddress)
   self.lenderAddress[_lender] = _newAddress
 
 @external
@@ -316,6 +322,7 @@ def changeLenderAddress(_lender: uint256, _newAddress: address, _confirm: bool):
   if _confirm:
     self._updateLenderAddress(_lender, _newAddress)
   else:
+    log PendingChangeLenderAddress(_lender, self.pendingLenderAddress[_lender], _newAddress)
     self.pendingLenderAddress[_lender] = _newAddress
 
 @external

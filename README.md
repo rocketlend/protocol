@@ -231,7 +231,12 @@ Vyper), chosen to be large enough to be practically unlimited.
 - `RegisterLender`
     - `id: indexed(uint256)`
     - `address: indexed(address)`
-- `UpdateLender`
+- `PendingChangeLenderAddress`
+    - `id: indexed(uint256)`
+    - `old: indexed(address)`
+    - `new: indexed(address)`
+    - `oldPending: address`
+- `ConfirmChangeLenderAddress`
     - `id: indexed(uint256)`
     - `old: indexed(address)`
     - `new: indexed(address)`
