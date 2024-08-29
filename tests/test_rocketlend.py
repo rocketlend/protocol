@@ -247,7 +247,7 @@ def distributedRewards(rocketlend, nodeWithMPsJoined, rocketMinipoolManager, Con
             minipool = None
             index += 1
     accounts[1].transfer(minipool, 3 * 10 ** 18)
-    receipt = rocketlend.distributeMinipools(node, [minipool], True, sender=accounts[1])
+    receipt = rocketlend.distributeRefund(node, False, [index], True, [], sender=accounts[1])
     return dict(rocketlend=rocketlend, node=node, minipool=minipool, receipt=receipt)
 
 # Per-function tests
