@@ -488,10 +488,7 @@ def forceDistributeRefund(_poolId: bytes32, _node: address,
                           _minipools: DynArray[MinipoolArgument, MAX_NODE_MINIPOOLS]):
   self._checkFromLender(_poolId)
   self._checkEndedOwing(_poolId, _node)
-  total: uint256 = 0
-  if _distribute:
-    total += self._distribute(_node)
-  total += self._distributeRefundMinipools(_node, _minipools)
+  total: uint256 = self._claim(_node, _distribute, _minipools)
   assert 0 < total, "none"
   ethPerRpl: uint256 = staticcall self._getRocketNetworkPrices().getRPLPrice()
   startAmountETH: uint256 = self.borrowers[_node].ETH
@@ -867,18 +864,6 @@ def claimMerkleRewards(
   totalRPL, totalETH = self._claimMerkleRewards(_node, _rewardIndex, _amountRPL, _amountETH, _merkleProof, _stakeAmount)
   log ClaimRewards(_node, totalRPL, totalETH, _stakeAmount, self.borrowers[_node].RPL, self.borrowers[_node].ETH, self.borrowers[_node].index)
 
-@internal
-def _distribute(_node: address) -> uint256:
-  distributor: RocketNodeDistributorInterface = self._getNodeDistributor(_node)
-  nodeShare: uint256 = staticcall distributor.getNodeShare()
-  self.borrowers[_node].ETH += nodeShare
-  amount: uint256 = self.balance
-  self.allowPaymentsFrom = distributor.address
-  extcall distributor.distribute()
-  self.allowPaymentsFrom = empty(address)
-  assert amount + nodeShare == self.balance, "bal"
-  return nodeShare
-
 flag MinipoolAction:
   Distribute
   NotRewardsOnly
@@ -889,11 +874,24 @@ struct MinipoolArgument:
   action: MinipoolAction
 
 @internal
-def _distributeRefundMinipools(
+def _claim(
   _node: address,
+  _dist: bool,
   _args: DynArray[MinipoolArgument, MAX_NODE_MINIPOOLS],
 ) -> uint256:
-  if len(_args) == 0: return 0
+  total: uint256 = 0
+  if _dist:
+    distributor: RocketNodeDistributorInterface = self._getNodeDistributor(_node)
+    nodeShare: uint256 = staticcall distributor.getNodeShare()
+    self.borrowers[_node].ETH += nodeShare
+    amount: uint256 = self.balance
+    self.allowPaymentsFrom = distributor.address
+    extcall distributor.distribute()
+    self.allowPaymentsFrom = empty(address)
+    assert amount + nodeShare == self.balance, "bal"
+    total += nodeShare
+  if len(_args) == 0:
+    return total
   minipool: address = empty(address)
   manager: RocketMinipoolManagerInterface = self._getMinipoolManager()
   balance: uint256 = self.balance
@@ -905,7 +903,8 @@ def _distributeRefundMinipools(
     if MinipoolAction.Distribute in arg.action:
       extcall MinipoolInterface(minipool).distributeBalance(MinipoolAction.NotRewardsOnly not in arg.action)
   self.allowPaymentsFrom = empty(address)
-  return self.balance - balance
+  total += self.balance - balance
+  return total
 
 @external
 def distributeRefund(_node: address,
@@ -918,10 +917,7 @@ def distributeRefund(_node: address,
       break
   if needCheckFromBorrower:
     self._checkFromBorrower(_node)
-  total: uint256 = 0
-  if _distribute:
-    total += self._distribute(_node)
-  total += self._distributeRefundMinipools(_node, _minipools)
+  total: uint256 = self._claim(_node, _distribute, _minipools)
   self.borrowers[_node].ETH += total
   log DistributeRefund(_node, total, self.borrowers[_node].ETH)
 
