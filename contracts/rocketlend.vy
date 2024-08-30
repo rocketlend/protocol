@@ -195,6 +195,51 @@ struct BorrowerState:
 borrowers: public(HashMap[address, BorrowerState])
 intervals: public(HashMap[address, HashMap[uint256, bool]]) # intervals known to be claimed (up to borrowers[_].index)
 
+struct PoolItem:
+  next: uint256
+  poolId: bytes32
+# the index of the start and the end of a linked list is 0 (i.e. last item's next == 0, and first item is the next of index 0)
+# the element at index 0 is a sentinel: it stores the next unused item index, i.e. poolId == convert(len(nextIndex), bytes32)
+debtPools: public(HashMap[address, HashMap[uint256, PoolItem]]) # linked list of pools in which a borrower has non-zero debt, sorted by end time, earliest first
+untilList: public(HashMap[address, HashMap[uint256, PoolItem]]) # same linked list items as above, but sorted by accountedUntil time, earliest first
+
+# assumes _poolId is active for _node, but checks _prev is the right item to insert it after
+@internal
+def _insertDebtPool(_node: address, _poolId: bytes32, _prev: uint256):
+  newIndex: uint256 = convert(self.debtPools[_node][0].poolId, uint256)
+  self.debtPools[_node][0].poolId = convert(newIndex + 1, bytes32)
+  self.debtPools[_node][newIndex].poolId = _poolId
+  assert self.params[self.debtPools[_node][_prev].poolId].endTime <= self.params[_poolId].endTime or _prev == 0, "p"
+  nextIndex: uint256 = self.debtPools[_node][_prev].next
+  assert self.params[_poolId].endTime <= self.params[self.debtPools[_node][nextIndex].poolId].endTime or nextIndex == 0, "n"
+  self.debtPools[_node][newIndex].next = nextIndex
+  self.debtPools[_node][_prev].next = newIndex
+
+@internal
+def _removeDebtPool(_node: address, _poolId: bytes32, _prev: uint256):
+  index: uint256 = self.debtPools[_node][_prev].next
+  assert self.debtPools[_node][index].poolId == _poolId, "i"
+  nextIndex: uint256 = self.debtPools[_node][index].next
+  self.debtPools[_node][_prev].next = nextIndex
+
+@internal
+def _insertUntilList(_node: address, _poolId: bytes32, _prev: uint256):
+  newIndex: uint256 = convert(self.untilList[_node][0].poolId, uint256)
+  self.untilList[_node][0].poolId = convert(newIndex + 1, bytes32)
+  self.untilList[_node][newIndex].poolId = _poolId
+  assert self.loans[self.untilList[_node][_prev].poolId][_node].accountedUntil <= self.loans[_poolId][_node].accountedUntil or _prev == 0, "p"
+  nextIndex: uint256 = self.untilList[_node][_prev].next
+  assert self.loans[_poolId][_node].accountedUntil <= self.loans[self.untilList[_node][nextIndex].poolId][_node].accountedUntil or nextIndex == 0, "n"
+  self.untilList[_node][newIndex].next = nextIndex
+  self.untilList[_node][_prev].next = newIndex
+
+@internal
+def _removeUntilList(_node: address, _poolId: bytes32, _prev: uint256):
+  index: uint256 = self.untilList[_node][_prev].next
+  assert self.untilList[_node][index].poolId == _poolId, "i"
+  nextIndex: uint256 = self.untilList[_node][index].next
+  self.untilList[_node][_prev].next = nextIndex
+
 oneRPL: immutable(uint256)
 oneEther: constant(uint256) = 10 ** 18
 
@@ -694,10 +739,13 @@ def _repayInterest(_poolId: bytes32, _node: address, _amount: uint256) -> uint25
   return _amount
 
 @internal
-def _lend(_poolId: bytes32, _node: address, _amount: uint256):
+def _lend(_poolId: bytes32, _node: address, _amount: uint256, _index: uint256):
   if 0 < _amount:
     assert (self.allowedToBorrow[_poolId][empty(address)] or
             self.allowedToBorrow[_poolId][_node]), "r"
+    if (self.loans[_poolId][_node].borrowed == 0 and
+        self.loans[_poolId][_node].interestDue == 0):
+      self._insertDebtPool(_node, _poolId, _index)
     self.loans[_poolId][_node].borrowed += _amount
     self.borrowers[_node].borrowed += _amount
     self.pools[_poolId].available -= _amount
@@ -748,12 +796,12 @@ def _checkBorrowLimit2(_node: address):
   assert self._debt(_node) <= 2 * self._borrowLimit(_node), "lim"
 
 @external
-def borrow(_poolId: bytes32, _node: address, _amount: uint256):
+def borrow(_poolId: bytes32, _node: address, _amount: uint256, _index: uint256):
   self._checkFromBorrower(_node)
   assert block.timestamp < self.params[_poolId].endTime, "end"
   self._stakeRPLFor(_node, _amount)
   self._chargeInterest(_poolId, _node)
-  self._lend(_poolId, _node, _amount)
+  self._lend(_poolId, _node, _amount, _index)
   self._checkBorrowLimit(_node)
   log Borrow(_poolId, _node, _amount,
              self.loans[_poolId][_node].borrowed,
@@ -784,7 +832,7 @@ def repay(_poolId: bytes32, _node: address, _unstakeAmount: uint256, _repayAmoun
             self.loans[_poolId][_node].interestDue)
 
 @external
-def transferDebt(_node: address, _fromPool: bytes32, _toPool: bytes32,
+def transferDebt(_node: address, _fromPool: bytes32, _toPool: bytes32, _index: uint256,
                  _fromAvailable: uint256, _fromInterest: uint256, _fromAllowance: uint256):
   if msg.sender != self.borrowers[_node].address:
     # not from borrower allowed only if:
@@ -797,7 +845,7 @@ def transferDebt(_node: address, _fromPool: bytes32, _toPool: bytes32,
   self._chargeInterest(_fromPool, _node)
   assert block.timestamp < self.params[_toPool].endTime, "end"
   if 0 < _fromAvailable:
-    self._lend(_toPool, _node, _fromAvailable)
+    self._lend(_toPool, _node, _fromAvailable, _index)
     self._payDebt(_fromPool, _node, _fromAvailable)
   if 0 < _fromAllowance:
     assert self.params[_fromPool].lender == self.params[_toPool].lender, "lender"
