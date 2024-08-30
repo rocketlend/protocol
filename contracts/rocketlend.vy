@@ -221,6 +221,7 @@ def _removeDebtPool(_node: address, _poolId: bytes32, _prev: uint256):
   assert self.debtPools[_node][index].poolId == _poolId, "i"
   nextIndex: uint256 = self.debtPools[_node][index].next
   self.debtPools[_node][_prev].next = nextIndex
+  self.debtPools[_node][index].next = index
 
 @internal
 def _insertUntilList(_node: address, _poolId: bytes32, _prev: uint256):
@@ -239,6 +240,7 @@ def _removeUntilList(_node: address, _poolId: bytes32, _prev: uint256):
   assert self.untilList[_node][index].poolId == _poolId, "i"
   nextIndex: uint256 = self.untilList[_node][index].next
   self.untilList[_node][_prev].next = nextIndex
+  self.untilList[_node][index].next = index
 
 oneRPL: immutable(uint256)
 oneEther: constant(uint256) = 10 ** 18
