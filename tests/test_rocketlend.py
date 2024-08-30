@@ -15,7 +15,12 @@ rocketStorageAddresses = dict(
 SECONDS_PER_YEAR = 365 * 24 * 60 * 60
 
 nullAddress = '0x0000000000000000000000000000000000000000'
+
 stakingStatus = 2
+
+Distribute = 0
+NotRewardsOnly = 1
+Refund = 2
 
 def time_from_now(**kwargs):
     return round(time.time() + datetime.timedelta(**kwargs).total_seconds())
@@ -247,7 +252,7 @@ def distributedRewards(rocketlend, nodeWithMPsJoined, rocketMinipoolManager, Con
             minipool = None
             index += 1
     accounts[1].transfer(minipool, 3 * 10 ** 18)
-    receipt = rocketlend.distributeRefund(node, False, [index], True, [], sender=accounts[1])
+    receipt = rocketlend.distributeRefund(node, False, [[index, 1 << Distribute]], sender=accounts[1])
     return dict(rocketlend=rocketlend, node=node, minipool=minipool, receipt=receipt)
 
 # Per-function tests
@@ -728,7 +733,7 @@ def test_force_distribute_refund_other(rocketlendp, borrower1b, other):
     poolId = rocketlendp['poolId']
     node = borrower1b['node']
     with reverts('revert: auth'):
-        rocketlend.forceDistributeRefund(poolId, node, False, [], False, [], sender=other)
+        rocketlend.forceDistributeRefund(poolId, node, False, [], sender=other)
 
 def test_force_distribute_refund_not_ended(rocketlendp, borrower1b):
     rocketlend = rocketlendp['rocketlend']
@@ -736,7 +741,7 @@ def test_force_distribute_refund_not_ended(rocketlendp, borrower1b):
     node = borrower1b['node']
     lender = rocketlendp['lender']
     with reverts('revert: term'):
-        rocketlend.forceDistributeRefund(poolId, node, False, [], False, [], sender=lender)
+        rocketlend.forceDistributeRefund(poolId, node, False, [], sender=lender)
 
 #### TODO add good payout test
 
@@ -1148,7 +1153,8 @@ def test_distribute_rewards_two_MPs_from_other(rocketlend, nodeWithMPsJoined, ro
         accounts[1].transfer(minipool, index * 10 ** 18)
         index -= 1
     prev_eth = rocketlend.borrowers(node).ETH
-    receipt = rocketlend.distributeRefund(node, False, indices, True, [], sender=other)
+    args = [[index, 1 << Distribute] for index in indices]
+    receipt = rocketlend.distributeRefund(node, False, args, sender=other)
     logs = rocketlend.DistributeRefund.from_receipt(receipt)
     assert len(logs) == 1
     assert all(minipool.balance == 0 for minipool in minipools)
@@ -1173,9 +1179,9 @@ def test_other_distribute_minipool_then_refund(rocketlend, nodeWithMPsJoined, ot
     refundBalance = minipool.getNodeRefundBalance()
     assert minipool.balance == refundBalance
     with reverts('revert: auth'):
-        rocketlend.distributeRefund(node, False, [], True, [index], sender=other)
+        rocketlend.distributeRefund(node, False, [[index, 1 << Refund]], sender=other)
     prevBorrowerETH = rocketlend.borrowers(node).ETH
-    receipt = rocketlend.distributeRefund(node, False, [], True, [index], sender=borrower)
+    receipt = rocketlend.distributeRefund(node, False, [[index, 1 << Refund]], sender=borrower)
     logs = rocketlend.DistributeRefund.from_receipt(receipt)
     assert len(logs) == 1
     assert minipool.balance == 0

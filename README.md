@@ -180,6 +180,13 @@ Vyper), chosen to be large enough to be practically unlimited.
   - `address: address`: current (Rocket Lend) borrower address
   - `pending: address`: pending address used when changing the borrower address
 
+- `MinipoolArgument`
+  - `index: uint256`: index of minipool on node
+  - `action: uint256`: bitfield (flag) with 3 bits:
+    - bit 0: distribute this minipool
+    - bit 1: set `rewardsOnly` to false when distributing
+    - bit 2: refund this minipool
+
 ### Views
 
 - `nextLenderId() → uint256`: the first unassigned lender identifier
@@ -208,7 +215,7 @@ Vyper), chosen to be large enough to be practically unlimited.
 - `forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256)`
 - `forceRepayETH(_poolId: bytes32, _node: address)`
 - `forceClaimMerkleRewards(_poolId: bytes32, _node: address, _repayRPL: uint256, _repayETH: uint256, _rewardIndex: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountRPL: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountETH: DynArray[uint256, MAX_CLAIM_INTERVALS], _merkleProof: DynArray[DynArray[bytes32, MAX_PROOF_LENGTH], MAX_CLAIM_INTERVALS])`
-- `forceDistributeRefund(_poolId: bytes32, _node: address, _distribute: bool, _distributeMinipools: DynArray[uint256, MAX_NODE_MINIPOOLS], _rewardsOnly: bool, _refundMinipools: DynArray[uint256, MAX_NODE_MINIPOOLS])`
+- `forceDistributeRefund(_poolId: bytes32, _node: address, _distribute: bool, _minipools: DynArray[MinipoolArgument, MAX_NODE_MINIPOOLS])`
 
 ### Borrower functions
 - `changeBorrowerAddress(_node: address, _newAddress: address, _confirm: bool)`
@@ -222,7 +229,7 @@ Vyper), chosen to be large enough to be practically unlimited.
 - `repay(_poolId: bytes32, _node: address, _withdrawAmount: uint256, _repayAmount: uint256)`
 - `transferDebt(_node: address, _fromPool: bytes32, _toPool: bytes32, _fromAvailable: uint256, _fromInterest: uint256, _fromAllowance: uint256)`
 - `claimMerkleRewards(_node: address, _rewardIndex: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountRPL: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountETH: DynArray[uint256, MAX_CLAIM_INTERVALS], _merkleProof: DynArray[DynArray[bytes32, MAX_PROOF_LENGTH], MAX_CLAIM_INTERVALS], _stakeAmount: uint256)`
-- `distributeRefund(_node: address, _distribute: bool, _distributeMinipools: DynArray[uint256, MAX_NODE_MINIPOOLS], _rewardsOnly: bool, _refundMinipools: DynArray[uint256, MAX_NODE_MINIPOOLS])`
+- `distributeRefund(_node: address, _distribute: bool, _minipools: DynArray[MinipoolArgument, MAX_NODE_MINIPOOLS])`
 - `withdraw(_node: address, _amountRPL: uint256, _amountETH: uint256)`
 - `depositETH(_node: address, _amount: uint256)`
 
