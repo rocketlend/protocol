@@ -991,7 +991,7 @@ def test_stake_rpl_for(borrower1b, RPLToken, rocketNodeStaking, rocketVaultImper
 ### setStakeRPLForAllowed
 #### TODO
 
-### withdrawRPL
+### unstakeRPL
 #### TODO
 
 ### borrow
@@ -1201,7 +1201,7 @@ def test_withdraw_RPL(rocketlendp, RPLToken, borrower1b, chain):
     chain.pending_timestamp += round(datetime.timedelta(days=90).total_seconds())
     # increase RPL held in rocketlend
     amountBorrowed = borrower1b['amount']
-    rocketlend.withdrawRPL(node, amountBorrowed, sender=borrower)
+    rocketlend.unstakeRPL(node, amountBorrowed, sender=borrower)
 
     debt = get_debt(rocketlend, node)
     prevBalanceRPL = rocketlend.borrowers(node).RPL
@@ -1238,7 +1238,7 @@ def test_withdraw_too_much_RPL(rocketlendp, borrower1b, chain):
     chain.pending_timestamp += round(datetime.timedelta(days=90).total_seconds())
     # increase RPL held in rocketlend
     amountBorrowed = borrower1b['amount']
-    rocketlend.withdrawRPL(node, amountBorrowed, sender=borrower)
+    rocketlend.unstakeRPL(node, amountBorrowed, sender=borrower)
 
     debt = get_debt(rocketlend, node)
     prevBalanceRPL = rocketlend.borrowers(node).RPL

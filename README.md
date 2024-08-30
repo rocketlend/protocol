@@ -202,6 +202,7 @@ Vyper), chosen to be large enough to be practically unlimited.
 - `RPL() → address`: the address of the RPL token contract
 
 ### Lender functions
+
 - `registerLender() → uint256`
 - `changeLenderAddress(_lender: uint256, _newAddress: address, _confirm: bool)`
 - `confirmChangeLenderAddress(_lender: uint256)`
@@ -211,21 +212,22 @@ Vyper), chosen to be large enough to be practically unlimited.
 - `changeAllowedToBorrow(_poolId: bytes32, _allowed: bool, _nodes: DynArray[address, MAX_ADDRESS_BATCH])`
 - `withdrawFromPool(_poolId: bytes32, _interest: uint256, _andSupply: uint256, _amountRPL: uint256, _amountETH: uint256)`
 - `updateInterestDue(_poolId: bytes32, _node: address)`: can be called by anyone
-- `forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256)`
+- `forceRepayRPL(_poolId: bytes32, _node: address, _unstakeAmount: uint256)`: can be called by anyone
 - `forceRepayETH(_poolId: bytes32, _node: address)`
 - `forceClaimMerkleRewards(_poolId: bytes32, _node: address, _repayRPL: uint256, _repayETH: uint256, _rewardIndex: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountRPL: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountETH: DynArray[uint256, MAX_CLAIM_INTERVALS], _merkleProof: DynArray[DynArray[bytes32, MAX_PROOF_LENGTH], MAX_CLAIM_INTERVALS])`
 - `forceDistributeRefund(_poolId: bytes32, _node: address, _distribute: bool, _minipools: DynArray[MinipoolArgument, MAX_NODE_MINIPOOLS])`
 
 ### Borrower functions
+
 - `changeBorrowerAddress(_node: address, _newAddress: address, _confirm: bool)`
 - `confirmChangeBorrowerAddress(_node: address)`
 - `joinAsBorrower(_node: address)`
 - `leaveAsBorrower(_node: address)`
 - `stakeRPLFor(_node: address, _amount: uint256)`
 - `setStakeRPLForAllowed(_node: address, _caller: address, _allowed: bool)`
-- `withdrawRPL(_node: address, _amount: uint256)`
+- `unstakeRPL(_node: address, _amount: uint256)`
 - `borrow(_poolId: bytes32, _node: address, _amount: uint256)`
-- `repay(_poolId: bytes32, _node: address, _withdrawAmount: uint256, _repayAmount: uint256)`
+- `repay(_poolId: bytes32, _node: address, _unstakeAmount: uint256, _repayAmount: uint256)`
 - `transferDebt(_node: address, _fromPool: bytes32, _toPool: bytes32, _fromAvailable: uint256, _fromInterest: uint256, _fromAllowance: uint256)`
 - `claimMerkleRewards(_node: address, _rewardIndex: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountRPL: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountETH: DynArray[uint256, MAX_CLAIM_INTERVALS], _merkleProof: DynArray[DynArray[bytes32, MAX_PROOF_LENGTH], MAX_CLAIM_INTERVALS], _stakeAmount: uint256)`
 - `distributeRefund(_node: address, _distribute: bool, _minipools: DynArray[MinipoolArgument, MAX_NODE_MINIPOOLS])`
@@ -314,7 +316,7 @@ Vyper), chosen to be large enough to be practically unlimited.
     - `node: indexed(address)`
 - `LeaveProtocol`
     - `node: indexed(address)`
-- `WithdrawRPL`
+- `UnstakeRPL`
     - `node: indexed(address)`
     - `amount: indexed(uint256)`
     - `total: indexed(uint256)`
