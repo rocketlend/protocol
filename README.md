@@ -79,14 +79,16 @@ Borrowers can use the Rocket Lend contract to:
   borrow from the target pool). If the target pool belongs to the same lender,
   this can be done up to the lender's allowance for transfers without requiring
   available funds in the target pool
-- Withdraw RPL stake or claim RPL or ETH rewards (after repaying any debt) from
-  their node to their balance in Rocket Lend. This includes handling Merkle
-  rewards
 - Withdraw ETH rewards and/or unstaked ETH from their node to their balance in
   Rocket Lend. This includes handling minipool distributions and refunds, and
   fee distributor distributions
-- Withdraw RPL and/or ETH from Rocket Lend to their borrower address, as long
-  as they remain within the borrow limit
+- Withdraw RPL and ETH Merkle rewards from Rocket Pool into the borrower's
+  Rocket Lend balance
+- Withdraw RPL and/or ETH from Rocket Lend to their borrower address. The
+  available RPL (in Rocket Lend and staked on their node) after withdrawing
+  must cover the borrower's total debt (including interest), and the available
+  ETH must be sufficient for the borrow limit check (described below).
+  Withdrawal is disallowed if the borrower has debt in an expired pool.
 - Deposit ETH from their balance in Rocket Lend back onto their Rocket Pool
   node
 - Exit Rocket Lend by changing their node's primary and RPL withdrawal
