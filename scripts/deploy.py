@@ -13,8 +13,9 @@ def main():
     if network_name != 'holesky-fork':
         raise f'Only holesky-fork is currently supported, not {network_name}'
     deployer = accounts.test_accounts[0]
-    deployer.deploy(project.rocketlend, rocketStorageAddresses['holesky'])
+    rocketlend = deployer.deploy(project.rocketlend, rocketStorageAddresses['holesky'])
     print(f'RPC available at {provider_uri}')
+    print(f'Deployed at {rocketlend.creation_metadata.block}')
     rocketStorage = Contract(rocketStorageAddresses['holesky'])
     rocketVault = accounts[rocketStorage.getAddress(keccak('contract.addressrocketVault'.encode()))]
     RPLToken = Contract(rocketStorage.getAddress(keccak('contract.addressrocketTokenRPL'.encode())))
