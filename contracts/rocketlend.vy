@@ -418,16 +418,15 @@ def withdrawInterest(_poolId: bytes32, _amount: uint256, _andSupply: uint256):
   log WithdrawInterest(_poolId, _amount, _andSupply, self.pools[_poolId].interestPaid, self.pools[_poolId].available)
 
 @internal
-def _checkEndedOwing(_poolId: bytes32, _node: address):
+def _chargeAndCheckEndedOwing(_poolId: bytes32, _node: address):
   endTime: uint256 = self.params[_poolId].endTime
   assert endTime < block.timestamp, "term"
-  if self.loans[_poolId][_node].accountedUntil < endTime:
-    self._chargeInterest(_poolId, _node)
+  self._chargeInterest(_poolId, _node)
   assert 0 < self.loans[_poolId][_node].borrowed or 0 < self.loans[_poolId][_node].interestDue, "paid"
 
 @external
 def forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256):
-  self._checkEndedOwing(_poolId, _node)
+  self._chargeAndCheckEndedOwing(_poolId, _node)
   if 0 < _withdrawAmount:
     extcall self._getRocketNodeStaking().withdrawRPL(_node, _withdrawAmount)
     self.borrowers[_node].RPL += _withdrawAmount
@@ -442,7 +441,7 @@ def forceRepayRPL(_poolId: bytes32, _node: address, _withdrawAmount: uint256):
 @external
 def forceRepayETH(_poolId: bytes32, _node: address):
   self._checkFromLender(_poolId)
-  self._checkEndedOwing(_poolId, _node)
+  self._chargeAndCheckEndedOwing(_poolId, _node)
   ethPerRpl: uint256 = staticcall self._getRocketNetworkPrices().getRPLPrice()
   startAmountETH: uint256 = self.borrowers[_node].ETH
   endAmountETH: uint256 = (self._payDebt(_poolId, _node, (startAmountETH * oneEther) // ethPerRpl) * ethPerRpl) // oneEther
@@ -466,7 +465,7 @@ def forceClaimMerkleRewards(
   if 0 < _repayETH:
     self._checkFromLender(_poolId)
   assert self.borrowers[_node].RPL < _repayRPL or self.borrowers[_node].ETH < _repayETH, "bal"
-  self._checkEndedOwing(_poolId, _node)
+  self._chargeAndCheckEndedOwing(_poolId, _node)
   totalRPL: uint256 = 0
   totalETH: uint256 = 0
   totalRPL, totalETH = self._claimMerkleRewards(_node, _rewardIndex, _amountRPL, _amountETH, _merkleProof, 0)
@@ -487,7 +486,7 @@ def forceDistributeRefund(_poolId: bytes32, _node: address,
                           _distribute: bool,
                           _minipools: DynArray[MinipoolArgument, MAX_NODE_MINIPOOLS]):
   self._checkFromLender(_poolId)
-  self._checkEndedOwing(_poolId, _node)
+  self._chargeAndCheckEndedOwing(_poolId, _node)
   total: uint256 = self._claim(_node, _distribute, _minipools)
   assert 0 < total, "none"
   ethPerRpl: uint256 = staticcall self._getRocketNetworkPrices().getRPLPrice()
