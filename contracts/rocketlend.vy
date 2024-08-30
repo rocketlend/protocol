@@ -732,6 +732,12 @@ def _availableEther(_node: address) -> uint256:
 
 @internal
 @view
+def _availableRPL(_node: address) -> uint256:
+  return (staticcall self._getRocketNodeStaking().getNodeRPLStake(_node)
+          + self.borrowers[_node].RPL)
+
+@internal
+@view
 def _borrowLimit(_node: address) -> uint256:
   return (self._availableEther(_node)
           * oneEther
@@ -924,7 +930,7 @@ def withdraw(_node: address, _amountRPL: uint256, _amountETH: uint256):
   if 0 < _amountRPL:
     self.borrowers[_node].RPL -= _amountRPL
     assert extcall RPL.transfer(msg.sender, _amountRPL), "t"
-  assert self._debt(_node) <= self.borrowers[_node].RPL, "debt"
+  assert self._debt(_node) <= self._availableRPL(_node), "debt"
   if 0 < _amountETH:
     self.borrowers[_node].ETH -= _amountETH
     self._checkBorrowLimit2(_node)
