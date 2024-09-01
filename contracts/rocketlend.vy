@@ -365,56 +365,46 @@ def _lenderAddress(_poolId: bytes32) -> address:
 def _checkFromLender(_poolId: bytes32):
   assert msg.sender == self._lenderAddress(_poolId), "auth"
 
-struct BorrowerArgument:
-  node: address
-  allowed: bool
+@external
+def changePoolRPL(_poolId: bytes32,
+                  _withdrawInterest: uint256,
+                  _targetSupply: uint256):
+  requireLender: bool = False
+  if 0 < _withdrawInterest:
+    requireLender = True
+    self.pools[_poolId].interestPaid -= _withdrawInterest
+    self.pools[_poolId].available += _withdrawInterest
+  currentSupply: uint256 = self.pools[_poolId].available
+  if _targetSupply < currentSupply:
+    requireLender = True
+    assert extcall RPL.transfer(msg.sender, currentSupply - _targetSupply), "t"
+  elif currentSupply < _targetSupply:
+    assert extcall RPL.transferFrom(msg.sender, self, _targetSupply - currentSupply), "tf"
+  if requireLender:
+    self._checkFromLender(_poolId)
+  self.pools[_poolId].available = _targetSupply
 
-flag ChangePoolValues:
-  WithdrawInterest
-  SupplyPool
-  SetAllowance
-  WithdrawRPL
-  WithdrawETH
+def withdrawEtherFromPool(_poolId: bytes32, _amount: uint256):
+  self._checkFromLender(_poolId)
+  self.pools[_poolId].reclaimed -= _amount
+  send(msg.sender, _amount, gas=msg.gas)
+
+addressMask: constant(uint256) = ~0 >> (32 - 20)
+allowedBit: constant(uint256) = 1 << 20
 
 @external
-def changePool(_poolId: bytes32,
-               _flag: ChangePoolValues,
-               _values: DynArray[uint256, 5],
-               _borrowers: DynArray[BorrowerArgument, MAX_ADDRESS_BATCH]):
-  if not (_flag == ChangePoolValues.SupplyPool and len(_borrowers) == 0):
-    self._checkFromLender(_poolId)
-  values: DynArray[uint256, 5] = _values
-  interest: uint256 = 0
-  value: uint256 = 0
-  if ChangePoolValues.WithdrawInterest in _flag:
-    interest = values.pop()
-    self.pools[_poolId].interestPaid -= interest
-    log WithdrawInterest(_poolId, interest)
-  if ChangePoolValues.SupplyPool in _flag:
-    value = values.pop()
-    if value < interest:
-      assert extcall RPL.transfer(msg.sender, interest - value), "ti"
-    elif value > interest:
-      assert extcall RPL.transferFrom(msg.sender, self, value - interest), "tf"
-    self.pools[_poolId].available += value
-    log SupplyPool(_poolId, value, self.pools[_poolId].available)
-  if ChangePoolValues.SetAllowance in _flag:
-    value = values.pop()
-    log SetAllowance(_poolId, self.pools[_poolId].allowance, value)
-    self.pools[_poolId].allowance = value
-  for arg: BorrowerArgument in _borrowers:
-    self.allowedToBorrow[_poolId][arg.node] = arg.allowed
-    log ChangeAllowedToBorrow(_poolId, arg.node, arg.allowed)
-  if ChangePoolValues.WithdrawRPL in _flag:
-    value = values.pop()
-    self.pools[_poolId].available -= value
-    log WithdrawRPLFromPool(_poolId, value)
-    assert extcall RPL.transfer(msg.sender, value), "t"
-  if ChangePoolValues.WithdrawETH in _flag:
-    value = values.pop()
-    self.pools[_poolId].reclaimed -= value
-    log WithdrawETHFromPool(_poolId, value)
-    send(msg.sender, value, gas=msg.gas)
+def changeAllowedToBorrow(_poolId: bytes32, _borrowers: DynArray[uint256, MAX_ADDRESS_BATCH]):
+  self._checkFromLender(_poolId)
+  for arg: uint256 in _borrowers:
+    node: address = convert(arg & addressMask, address)
+    allowed: bool = convert(arg & allowedBit, bool)
+    self.allowedToBorrow[_poolId][node] = allowed
+
+@external
+def setAllowance(_poolId: bytes32, _allowance: uint256):
+  self._checkFromLender(_poolId)
+  log SetAllowance(_poolId, self.pools[_poolId].allowance, _allowance)
+  self.pools[_poolId].allowance = _allowance
 
 @external
 def updateInterestDue(_poolId: bytes32, _node: address):
