@@ -264,18 +264,15 @@ Vyper), chosen to be large enough to be practically unlimited.
     - `id: indexed(bytes32)`
     - `allowed: indexed(bool)`
     - `nodes: DynArray[address, MAX_ADDRESS_BATCH]`
-- `WithdrawFromPool`
+- `WithdrawETHFromPool`
     - `id: indexed(bytes32)`
-    - `interest: uint256`
-    - `supplied: uint256`
-    - `amountRPL: uint256`
-    - `amountETH: uint256`
-- `ChargeInterest`
+    - `amount: indexed(uint256)`
+- `WithdrawRPLFromPool`
     - `id: indexed(bytes32)`
-    - `node: indexed(address)`
-    - `charged: uint256`
-    - `total: uint256`
-    - `until: uint256`
+    - `amount: indexed(uint256)`
+- `WithdrawInterest`
+    - `id: indexed(bytes32)`
+    - `amount: indexed(uint256)`
 - `ForceRepayRPL`
     - `id: indexed(bytes32)`
     - `node: indexed(address)`
@@ -309,6 +306,12 @@ Vyper), chosen to be large enough to be practically unlimited.
     - `available: uint256`
     - `borrowed: uint256`
     - `interestDue: uint256`
+- `ChargeInterest`
+    - `id: indexed(bytes32)`
+    - `node: indexed(address)`
+    - `charged: uint256`
+    - `total: uint256`
+    - `until: uint256`
 - `UpdateBorrower`
     - `node: indexed(address)`
     - `old: indexed(address)`
