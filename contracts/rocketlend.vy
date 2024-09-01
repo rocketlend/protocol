@@ -363,28 +363,24 @@ def _supplyPool(_poolId: bytes32, _amount: uint256):
   self.pools[_poolId].available += _amount
   log SupplyPool(_poolId, _amount, self.pools[_poolId].available)
 
-@external
-def supplyPool(_poolId: bytes32, _amount: uint256):
-  self._supplyPool(_poolId, _amount)
-
 @internal
 def _setAllowance(_poolId: bytes32, _amount: uint256):
   log SetAllowance(_poolId, self.pools[_poolId].allowance, _amount)
   self.pools[_poolId].allowance = _amount
 
-@external
-def setAllowance(_poolId: bytes32, _amount: uint256):
-  self._checkFromLender(_poolId)
-  self._setAllowance(_poolId, _amount)
+struct BorrowerArgument:
+  node: address
+  allowed: bool
 
 @external
-def changeAllowedToBorrow(_poolId: bytes32, _allowed: bool, _nodes: DynArray[address, MAX_ADDRESS_BATCH]):
+def changePool(_poolId: bytes32, _andSupply: uint256, _allowance: uint256, _borrowers: DynArray[BorrowerArgument, MAX_ADDRESS_BATCH]):
   self._checkFromLender(_poolId)
-  if _allowed:
-    self.allowedToBorrow[_poolId][empty(address)] = False
-  for node: address in _nodes:
-    self.allowedToBorrow[_poolId][node] = _allowed
-  log ChangeAllowedToBorrow(_poolId, _allowed, _nodes)
+  if 0 < _andSupply:
+    self._supplyPool(_poolId, _andSupply)
+  if _allowance != self.pools[_poolId].allowance:
+    self._setAllowance(_poolId, _allowance)
+  for arg: BorrowerArgument in _borrowers:
+    self.allowedToBorrow[_poolId][arg.node] = arg.allowed
 
 @external
 def withdrawFromPool(_poolId: bytes32, _interest: uint256, _andSupply: uint256, _amountRPL: uint256, _amountETH: uint256):
