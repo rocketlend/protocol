@@ -187,6 +187,10 @@ Vyper), chosen to be large enough to be practically unlimited.
     - bit 1: set `rewardsOnly` to false when distributing
     - bit 2: refund this minipool
 
+- `BorrowerArgument`
+  - `node: address`
+  - `allowed: bool`
+
 ### Views
 
 - `nextLenderId() → uint256`: the first unassigned lender identifier
@@ -206,11 +210,8 @@ Vyper), chosen to be large enough to be practically unlimited.
 - `registerLender() → uint256`
 - `changeLenderAddress(_lender: uint256, _newAddress: address, _confirm: bool)`
 - `confirmChangeLenderAddress(_lender: uint256)`
-- `createPool(_params: PoolParams, _andSupply: uint256, _allowance: uint256, _borrowers: DynArray[address, MAX_ADDRESS_BATCH]) → bytes32`
-- `supplyPool(_poolId: bytes32, _amount: uint256)`
-- `setAllowance(_poolId: bytes32, _amount: uint256)`
-- `changeAllowedToBorrow(_poolId: bytes32, _allowed: bool, _nodes: DynArray[address, MAX_ADDRESS_BATCH])`
-- `withdrawFromPool(_poolId: bytes32, _interest: uint256, _andSupply: uint256, _amountRPL: uint256, _amountETH: uint256)`
+- `createPool(_params: PoolParams, _supply: uint256, _allowance: uint256, _borrowers: DynArray[address, MAX_ADDRESS_BATCH]) → bytes32`
+- `changePool(_poolId: bytes32, _interest: uint256, _supply: uint256, _allowance: uint256, _borrowers: DynArray[BorrowerArgument, MAX_ADDRESS_BATCH], _withdrawRPL: uint256, _withdrawETH: uint256)`
 - `updateInterestDue(_poolId: bytes32, _node: address)`: can be called by anyone
 - `forceRepayRPL(_poolId: bytes32, _node: address, _unstakeAmount: uint256)`: can be called by anyone
 - `forceRepayETH(_poolId: bytes32, _node: address)`
