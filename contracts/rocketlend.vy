@@ -990,10 +990,12 @@ def distributeRefund(_node: address,
 @external
 def withdraw(_node: address, _amountRPL: uint256, _amountETH: uint256):
   self._checkFromBorrower(_node)
+  assert (self.debtPools[_node][0].next == 0 or
+          block.timestamp < self.params[self.debtPools[_node][self.debtPools[_node][0].next].poolId].endTime), "f"
   if 0 < _amountRPL:
     self.borrowers[_node].RPL -= _amountRPL
     assert extcall RPL.transfer(msg.sender, _amountRPL), "t"
-  assert self._debt(_node) <= self._availableRPL(_node), "debt"
+  assert self._debt(_node) <= self._availableRPL(_node), "d"
   if 0 < _amountETH:
     self.borrowers[_node].ETH -= _amountETH
     self._checkBorrowLimit2(_node)
