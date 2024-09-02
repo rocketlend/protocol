@@ -468,7 +468,7 @@ def _chargeAndCheckEndedOwing(_poolId: bytes32, _node: address):
   assert 0 < self.loans[_poolId][_node].borrowed or 0 < self.loans[_poolId][_node].interestDue, "paid"
 
 @external
-def forceRepayRPL(_poolId: bytes32, _node: address, _unstakeAmount: uint256):
+def forceRepayRPL(_poolId: bytes32, _node: address, _prevIndex: uint256, _unstakeAmount: uint256):
   self._chargeAndCheckEndedOwing(_poolId, _node)
   if 0 < _unstakeAmount:
     extcall self._getRocketNodeStaking().withdrawRPL(_node, _unstakeAmount)
@@ -476,18 +476,18 @@ def forceRepayRPL(_poolId: bytes32, _node: address, _unstakeAmount: uint256):
   available: uint256 = self.borrowers[_node].RPL
   if 0 < _unstakeAmount:
     assert available <= self.loans[_poolId][_node].interestDue + self.loans[_poolId][_node].borrowed, "wd"
-  available = self._payDebt(_poolId, _node, available)
+  available = self._payDebt(_poolId, _node, _prevIndex, available)
   assert available < self.borrowers[_node].RPL, "none"
   self.borrowers[_node].RPL = available
   log ForceRepayRPL(_poolId, _node, _unstakeAmount, available, self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
 
 @external
-def forceRepayETH(_poolId: bytes32, _node: address):
+def forceRepayETH(_poolId: bytes32, _node: address, _prevIndex: uint256):
   self._checkFromLender(_poolId)
   self._chargeAndCheckEndedOwing(_poolId, _node)
   ethPerRpl: uint256 = staticcall self._getRocketNetworkPrices().getRPLPrice()
   startAmountETH: uint256 = self.borrowers[_node].ETH
-  endAmountETH: uint256 = (self._payDebt(_poolId, _node, (startAmountETH * oneEther) // ethPerRpl) * ethPerRpl) // oneEther
+  endAmountETH: uint256 = (self._payDebt(_poolId, _node, _prevIndex, (startAmountETH * oneEther) // ethPerRpl) * ethPerRpl) // oneEther
   reclaimedETH: uint256 = startAmountETH - endAmountETH
   assert 0 < reclaimedETH, "none"
   self.borrowers[_node].ETH = endAmountETH
@@ -498,6 +498,7 @@ def forceRepayETH(_poolId: bytes32, _node: address):
 def forceClaimMerkleRewards(
       _poolId: bytes32,
       _node: address,
+      _prevIndex: uint256,
       _repayRPL: uint256,
       _repayETH: uint256,
       _rewardIndex: DynArray[uint256, MAX_CLAIM_INTERVALS],
@@ -513,11 +514,11 @@ def forceClaimMerkleRewards(
   totalETH: uint256 = 0
   totalRPL, totalETH = self._claimMerkleRewards(_node, _rewardIndex, _amountRPL, _amountETH, _merkleProof, 0)
   if 0 < _repayRPL:
-    assert self._payDebt(_poolId, _node, _repayRPL) == 0, "RPL"
+    assert self._payDebt(_poolId, _node, _prevIndex, _repayRPL) == 0, "RPL"
     self.borrowers[_node].RPL -= _repayRPL
   if 0 < _repayETH:
     ethPerRpl: uint256 = staticcall self._getRocketNetworkPrices().getRPLPrice()
-    assert self._payDebt(_poolId, _node, _repayETH // ethPerRpl) == 0, "ETH"
+    assert self._payDebt(_poolId, _node, _prevIndex, _repayETH // ethPerRpl) == 0, "ETH"
     self.borrowers[_node].ETH -= _repayETH
     self.pools[_poolId].reclaimed += _repayETH
   log ForceClaimRewards(_poolId, _node, totalRPL, totalETH, _repayRPL, _repayETH,
@@ -525,7 +526,7 @@ def forceClaimMerkleRewards(
                         self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
 
 @external
-def forceDistributeRefund(_poolId: bytes32, _node: address,
+def forceDistributeRefund(_poolId: bytes32, _node: address, _prevIndex: uint256,
                           _distribute: bool,
                           _minipools: DynArray[MinipoolArgument, MAX_NODE_MINIPOOLS]):
   self._checkFromLender(_poolId)
@@ -534,7 +535,7 @@ def forceDistributeRefund(_poolId: bytes32, _node: address,
   assert 0 < total, "none"
   ethPerRpl: uint256 = staticcall self._getRocketNetworkPrices().getRPLPrice()
   startAmountETH: uint256 = self.borrowers[_node].ETH
-  endAmountETH: uint256 = (self._payDebt(_poolId, _node, (startAmountETH * oneEther) // ethPerRpl) * ethPerRpl) // oneEther
+  endAmountETH: uint256 = (self._payDebt(_poolId, _node, _prevIndex, (startAmountETH * oneEther) // ethPerRpl) * ethPerRpl) // oneEther
 
   reclaimedETH: uint256 = startAmountETH - endAmountETH
   assert 0 < reclaimedETH, "none"
@@ -544,13 +545,14 @@ def forceDistributeRefund(_poolId: bytes32, _node: address,
                             self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
 
 @internal
-def _payDebt(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
+def _payDebt(_poolId: bytes32, _node: address, _prevIndex: uint256, _amount: uint256) -> uint256:
   amount: uint256 = _amount
   if amount <= self.loans[_poolId][_node].interestDue:
     amount -= self._repayInterest(_poolId, _node, amount)
   else:
     amount -= self._repayInterest(_poolId, _node, self.loans[_poolId][_node].interestDue)
     amount -= self._repay(_poolId, _node, min(amount, self.loans[_poolId][_node].borrowed))
+  self._removeDebtPoolIfNeeded(_node, _poolId, _prevIndex)
   return amount
 
 # Borrower actions
@@ -733,25 +735,34 @@ def _chargeInterest(_poolId: bytes32, _node: address):
   log ChargeInterest(_poolId, _node, amount, self.borrowers[_node].interestDue, block.timestamp)
 
 @internal
+def _removeDebtPoolIfNeeded(_node: address, _poolId: bytes32, _prevIndex: uint256):
+  if (self.loans[_poolId][_node].borrowed == 0 and
+      self.loans[_poolId][_node].interestDue == 0):
+    self._removeDebtPool(_node, _poolId, _prevIndex)
+
+@internal
+def _insertDebtPoolIfNeeded(_node: address, _poolId: bytes32, _prevIndex: uint256):
+  if (self.loans[_poolId][_node].borrowed == 0 and
+      self.loans[_poolId][_node].interestDue == 0):
+    self._insertDebtPool(_node, _poolId, _prevIndex)
+
+@internal
+def _lend(_poolId: bytes32, _node: address, _amount: uint256):
+  if 0 < _amount:
+    assert (self.allowedToBorrow[_poolId][empty(address)] or
+            self.allowedToBorrow[_poolId][_node]), "r"
+    self.loans[_poolId][_node].borrowed += _amount
+    self.borrowers[_node].borrowed += _amount
+    self.pools[_poolId].available -= _amount
+    self.pools[_poolId].borrowed += _amount
+
+@internal
 def _repayInterest(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
   if 0 < _amount:
     self.loans[_poolId][_node].interestDue -= _amount
     self.borrowers[_node].interestDue -= _amount
     self.pools[_poolId].interestPaid += _amount
   return _amount
-
-@internal
-def _lend(_poolId: bytes32, _node: address, _amount: uint256, _index: uint256):
-  if 0 < _amount:
-    assert (self.allowedToBorrow[_poolId][empty(address)] or
-            self.allowedToBorrow[_poolId][_node]), "r"
-    if (self.loans[_poolId][_node].borrowed == 0 and
-        self.loans[_poolId][_node].interestDue == 0):
-      self._insertDebtPool(_node, _poolId, _index)
-    self.loans[_poolId][_node].borrowed += _amount
-    self.borrowers[_node].borrowed += _amount
-    self.pools[_poolId].available -= _amount
-    self.pools[_poolId].borrowed += _amount
 
 @internal
 def _repay(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
@@ -798,19 +809,21 @@ def _checkBorrowLimit2(_node: address):
   assert self._debt(_node) <= 2 * self._borrowLimit(_node), "lim"
 
 @external
-def borrow(_poolId: bytes32, _node: address, _amount: uint256, _index: uint256):
+def borrow(_poolId: bytes32, _node: address, _prevIndex: uint256, _amount: uint256):
   self._checkFromBorrower(_node)
   assert block.timestamp < self.params[_poolId].endTime, "end"
   self._stakeRPLFor(_node, _amount)
+  self._insertDebtPoolIfNeeded(_node, _poolId, _prevIndex)
   self._chargeInterest(_poolId, _node)
-  self._lend(_poolId, _node, _amount, _index)
+  self._lend(_poolId, _node, _amount)
+  assert 0 < self.loans[_poolId][_node].borrowed or 0 < self.loans[_poolId][_node].interestDue, "none"
   self._checkBorrowLimit(_node)
   log Borrow(_poolId, _node, _amount,
              self.loans[_poolId][_node].borrowed,
              self.loans[_poolId][_node].interestDue)
 
 @external
-def repay(_poolId: bytes32, _node: address, _unstakeAmount: uint256, _repayAmount: uint256):
+def repay(_poolId: bytes32, _node: address, _prevIndex: uint256, _unstakeAmount: uint256, _repayAmount: uint256):
   isBorrower: bool = msg.sender == self.borrowers[_node].address
   assert _unstakeAmount == 0 or isBorrower, "auth"
   self._chargeInterest(_poolId, _node)
@@ -828,14 +841,18 @@ def repay(_poolId: bytes32, _node: address, _unstakeAmount: uint256, _repayAmoun
   if obtained < target:
     assert extcall RPL.transferFrom(msg.sender, self, target - obtained), "tf"
     obtained = target
-  assert self._payDebt(_poolId, _node, obtained) == 0, "over"
+  assert self._payDebt(_poolId, _node, _prevIndex, obtained) == 0, "over"
   log Repay(_poolId, _node, obtained,
             self.loans[_poolId][_node].borrowed,
             self.loans[_poolId][_node].interestDue)
 
 @external
-def transferDebt(_node: address, _fromPool: bytes32, _toPool: bytes32, _index: uint256,
-                 _fromAvailable: uint256, _fromInterest: uint256, _fromAllowance: uint256):
+def transferDebt(_node: address,
+                 _fromPool: bytes32, _fromPrevIndex: uint256,
+                 _toPool: bytes32, _toPrevIndex: uint256,
+                 _fromInterest: uint256,
+                 _fromAllowance: uint256,
+                 _fromAvailable: uint256):
   if msg.sender != self.borrowers[_node].address:
     # not from borrower allowed only if:
     # from lender, after end time, to a pool of no greater interest rate
@@ -846,9 +863,13 @@ def transferDebt(_node: address, _fromPool: bytes32, _toPool: bytes32, _index: u
     ), "auth"
   self._chargeInterest(_fromPool, _node)
   assert block.timestamp < self.params[_toPool].endTime, "end"
-  if 0 < _fromAvailable:
-    self._lend(_toPool, _node, _fromAvailable, _index)
-    self._payDebt(_fromPool, _node, _fromAvailable)
+  if 0 < _fromInterest or 0 < _fromAllowance or 0 < _fromAvailable:
+    self._insertDebtPoolIfNeeded(_node, _toPool, _toPrevIndex)
+  if 0 < _fromInterest:
+    assert self.params[_fromPool].lender == self.params[_toPool].lender, "lender"
+    self.pools[_toPool].allowance -= _fromInterest
+    self.loans[_fromPool][_node].interestDue -= _fromInterest
+    self.loans[_toPool][_node].interestDue += _fromInterest
   if 0 < _fromAllowance:
     assert self.params[_fromPool].lender == self.params[_toPool].lender, "lender"
     self.pools[_toPool].allowance -= _fromAllowance
@@ -856,11 +877,11 @@ def transferDebt(_node: address, _fromPool: bytes32, _toPool: bytes32, _index: u
     self.loans[_toPool][_node].borrowed += _fromAllowance
     self.pools[_fromPool].borrowed -= _fromAllowance
     self.pools[_toPool].borrowed += _fromAllowance
-  if 0 < _fromInterest:
-    assert self.params[_fromPool].lender == self.params[_toPool].lender, "lender"
-    self.pools[_toPool].allowance -= _fromInterest
-    self.loans[_fromPool][_node].interestDue -= _fromInterest
-    self.loans[_toPool][_node].interestDue += _fromInterest
+  if 0 < _fromAvailable:
+    self._lend(_toPool, _node, _fromAvailable)
+    self._payDebt(_fromPool, _node, _fromPrevIndex, _fromAvailable)
+  else:
+    self._removeDebtPoolIfNeeded(_node, _fromPool, _fromPrevIndex)
   log TransferDebt(_node, _fromPool, _toPool, _fromAvailable, _fromInterest, _fromAllowance)
 
 @internal
