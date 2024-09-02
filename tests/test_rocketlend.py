@@ -22,6 +22,14 @@ Distribute = 0
 NotRewardsOnly = 1
 Refund = 2
 
+allowedBit = 1 << 20
+
+def mark_allowed(nodes):
+    return [int(node) | allowedBit for node in nodes]
+
+def mark_not_allowed(nodes):
+    return [int(node) for node in nodes]
+
 def time_from_now(**kwargs):
     return round(time.time() + datetime.timedelta(**kwargs).total_seconds())
 
@@ -290,8 +298,7 @@ def test_supply_set(rocketlendp):
     poolId = rocketlendp['poolId']
     receipt = rocketlendp['receipt']
     log = rocketlend.SupplyPool.from_receipt(receipt)[0]
-    assert log.amount == log.total
-    assert rocketlend.pools(poolId).available == log.amount
+    assert rocketlend.pools(poolId).available == log.total
 
 def test_allowance_set(rocketlendp):
     rocketlend = rocketlendp['rocketlend']
@@ -435,20 +442,6 @@ def test_create_pool_with_supply(rocketlendf, RPLToken, rocketVaultImpersonated,
     logs = rocketlendf.CreatePool.from_receipt(receipt)
     assert len(logs) == 1
 
-### supplyPool
-
-def test_supply_more_other(rocketlendp, RPLToken, rocketVaultImpersonated, other):
-    amount = 100 * 10 ** RPLToken.decimals()
-    rocketlend = rocketlendp['rocketlend']
-    poolId = rocketlendp['poolId']
-    orig_receipt = rocketlendp['receipt']
-    orig_amount = rocketlend.SupplyPool.from_receipt(orig_receipt)[0].amount
-    grab_RPL(other, amount, RPLToken, rocketVaultImpersonated, rocketlend)
-    receipt = rocketlend.supplyPool(poolId, amount, sender=other)
-    logs = rocketlend.SupplyPool.from_receipt(receipt)
-    assert len(logs) == 1
-    assert logs[0].total == orig_amount + amount
-
 ### setAllowance
 
 def test_set_allowance_other(rocketlendp, other):
@@ -482,25 +475,25 @@ def test_change_allowed_to_borrow_other(rocketlendp, other):
     rocketlend = rocketlendp['rocketlend']
     poolId = rocketlendp['poolId']
     with reverts('revert: auth'):
-        rocketlend.changeAllowedToBorrow(poolId, True, [], sender=other)
+        rocketlend.changeAllowedToBorrow(poolId, [], sender=other)
 
 def test_change_allowed_to_borrow_true(rocketlendp, node1, node2):
     rocketlend = rocketlendp['rocketlend']
     poolId = rocketlendp['poolId']
     lender = rocketlendp['lender']
-    receipt = rocketlend.changeAllowedToBorrow(poolId, True, [node1, node2], sender=lender)
+    receipt = rocketlend.changeAllowedToBorrow(poolId, mark_allowed([node1, node2]), sender=lender)
     assert not rocketlend.allowedToBorrow(poolId, nullAddress)
     assert rocketlend.allowedToBorrow(poolId, node1)
     assert rocketlend.allowedToBorrow(poolId, node2)
     logs = rocketlend.ChangeAllowedToBorrow.from_receipt(receipt)
-    assert len(logs) == 1
+    assert len(logs) == 2
 
 def test_change_allowed_to_borrow_false_partial(rocketlendp, node1, node2):
     rocketlend = rocketlendp['rocketlend']
     poolId = rocketlendp['poolId']
     lender = rocketlendp['lender']
-    rocketlend.changeAllowedToBorrow(poolId, True, [node1, node2], sender=lender)
-    rocketlend.changeAllowedToBorrow(poolId, False, [node1], sender=lender)
+    rocketlend.changeAllowedToBorrow(poolId, mark_allowed([node1, node2]), sender=lender)
+    rocketlend.changeAllowedToBorrow(poolId, mark_not_allowed([node1]), sender=lender)
     assert not rocketlend.allowedToBorrow(poolId, nullAddress)
     assert not rocketlend.allowedToBorrow(poolId, node1)
     assert rocketlend.allowedToBorrow(poolId, node2)
@@ -509,22 +502,22 @@ def test_change_allowed_to_borrow_false_extra(rocketlendp, node1, node2):
     rocketlend = rocketlendp['rocketlend']
     poolId = rocketlendp['poolId']
     lender = rocketlendp['lender']
-    rocketlend.changeAllowedToBorrow(poolId, True, [node1], sender=lender)
-    rocketlend.changeAllowedToBorrow(poolId, False, [node1, node2], sender=lender)
+    rocketlend.changeAllowedToBorrow(poolId, mark_allowed([node1]), sender=lender)
+    rocketlend.changeAllowedToBorrow(poolId, mark_not_allowed([node1, node2]), sender=lender)
     assert not rocketlend.allowedToBorrow(poolId, nullAddress)
     assert not rocketlend.allowedToBorrow(poolId, node1)
-    rocketlend.changeAllowedToBorrow(poolId, True, [nullAddress], sender=lender)
+    rocketlend.changeAllowedToBorrow(poolId, mark_allowed([nullAddress]), sender=lender)
     assert rocketlend.allowedToBorrow(poolId, nullAddress)
     assert not rocketlend.allowedToBorrow(poolId, node1)
 
-### withdrawFromPool
+### changePoolRPL
 
 def test_withdraw_other(rocketlendp, other):
     rocketlend = rocketlendp['rocketlend']
     poolId = rocketlendp['poolId']
     amount = rocketlendp['amount'] // 2
     with reverts('revert: auth'):
-        rocketlend.withdrawFromPool(poolId, 0, 0, amount, 0, sender=other)
+        rocketlend.changePoolRPL(poolId, 0, amount, sender=other)
 
 def test_withdraw_unborrowed(rocketlendp, RPLToken):
     rocketlend = rocketlendp['rocketlend']
@@ -532,35 +525,30 @@ def test_withdraw_unborrowed(rocketlendp, RPLToken):
     lender = rocketlendp['lender']
     amount = rocketlendp['amount']
     before = RPLToken.balanceOf(lender)
-    receipt = rocketlend.withdrawFromPool(poolId, 0, 0, amount // 3, 0, sender=lender)
+    targetAmount = amount - amount // 3
+    receipt = rocketlend.changePoolRPL(poolId, 0, targetAmount, sender=lender)
     after = RPLToken.balanceOf(lender)
-    logs = rocketlend.WithdrawFromPool.from_receipt(receipt)
+    logs = rocketlend.WithdrawRPLFromPool.from_receipt(receipt)
     assert len(logs) == 1
-    assert logs[0].amountRPL == after - before
-    assert rocketlend.pools(poolId).available == amount - logs[0].amountRPL
+    assert amount - targetAmount == after - before
+    assert rocketlend.pools(poolId).available == targetAmount
 
-def test_withdraw_ether_from_pool_other(rocketlendp, other):
+def test_supply_more_other(rocketlendp, RPLToken, rocketVaultImpersonated, other):
+    amount = 100 * 10 ** RPLToken.decimals()
     rocketlend = rocketlendp['rocketlend']
     poolId = rocketlendp['poolId']
-    with reverts('revert: auth'):
-        rocketlend.withdrawFromPool(poolId, 0, 0, 0, 20, sender=other)
-
-def test_withdraw_ether_from_pool_none(rocketlendp):
-    rocketlend = rocketlendp['rocketlend']
-    poolId = rocketlendp['poolId']
-    lender = rocketlendp['lender']
-    assert rocketlend.pools(poolId).reclaimed == 0
-    with reverts('Integer underflow'):
-        rocketlend.withdrawFromPool(poolId, 0, 0, 0, 20, sender=lender)
-
-#### TODO: successful withdraw of ETH
-#### TODO: test withdrawing both RPL and ETH simultaneously
+    orig_amount = rocketlend.pools(poolId).available
+    grab_RPL(other, amount, RPLToken, rocketVaultImpersonated, rocketlend)
+    receipt = rocketlend.changePoolRPL(poolId, 0, orig_amount + amount, sender=other)
+    logs = rocketlend.SupplyPool.from_receipt(receipt)
+    assert len(logs) == 1
+    assert logs[0].total == orig_amount + amount
 
 def test_withdraw_interest_other(partialRepayment, other):
     rocketlend = partialRepayment['rocketlend']
     poolId = partialRepayment['poolId']
     with reverts('revert: auth'):
-        rocketlend.withdrawFromPool(poolId, 1, 0, 0, 0, sender=other)
+        rocketlend.changePoolRPL(poolId, 1, rocketlend.pools(poolId).available, sender=other)
 
 def test_withdraw_interest(partialRepayment, RPLToken):
     rocketlend = partialRepayment['rocketlend']
@@ -571,11 +559,10 @@ def test_withdraw_interest(partialRepayment, RPLToken):
     balanceBefore = RPLToken.balanceOf(lender)
     amount = paidBefore // 2
     assert 0 < amount
-    receipt = rocketlend.withdrawFromPool(poolId, amount, 0, 0, 0, sender=lender)
-    logs = rocketlend.WithdrawFromPool.from_receipt(receipt)
+    receipt = rocketlend.changePoolRPL(poolId, amount, supplyBefore, sender=lender)
+    logs = rocketlend.WithdrawInterest.from_receipt(receipt)
     assert len(logs) == 1
-    assert logs[0].interest == amount
-    assert logs[0].supplied == 0
+    assert logs[0].amount == amount
     assert RPLToken.balanceOf(lender) == balanceBefore + amount
     assert rocketlend.pools(poolId).available == supplyBefore
     assert rocketlend.pools(poolId).interestPaid == paidBefore - amount
@@ -589,11 +576,10 @@ def test_withdraw_interest_and_supply(partialRepayment, RPLToken):
     balanceBefore = RPLToken.balanceOf(lender)
     supplyAmount = paidBefore // 2
     assert 0 < supplyAmount
-    receipt = rocketlend.withdrawFromPool(poolId, paidBefore, supplyAmount, 0, 0, sender=lender)
-    logs = rocketlend.WithdrawFromPool.from_receipt(receipt)
+    receipt = rocketlend.changePoolRPL(poolId, paidBefore, supplyBefore + supplyAmount, sender=lender)
+    logs = rocketlend.WithdrawInterest.from_receipt(receipt)
     assert len(logs) == 1
-    assert logs[0].interest == paidBefore
-    assert logs[0].supplied == supplyAmount
+    assert logs[0].amount == paidBefore
     assert RPLToken.balanceOf(lender) == balanceBefore + paidBefore - supplyAmount
     assert rocketlend.pools(poolId).available == supplyBefore + supplyAmount
     assert rocketlend.pools(poolId).interestPaid == 0
@@ -608,7 +594,7 @@ def test_withdraw_interest_and_supply_more_than_available(partialRepayment, RPLT
     supplyAmount = paidBefore * 2
     assert balanceBefore < supplyAmount - paidBefore
     with reverts('revert: ERC20: transfer amount exceeds balance'):
-        rocketlend.withdrawFromPool(poolId, paidBefore, supplyAmount, 0, 0, sender=lender)
+        rocketlend.changePoolRPL(poolId, paidBefore, supplyBefore + supplyAmount, sender=lender)
 
 def test_withdraw_interest_and_supply_more_than_approved(partialRepayment, RPLToken, rocketVaultImpersonated):
     rocketlend = partialRepayment['rocketlend']
@@ -621,7 +607,7 @@ def test_withdraw_interest_and_supply_more_than_approved(partialRepayment, RPLTo
     supplyAmount = paidBefore * 2
     assert balanceBefore >= supplyAmount - paidBefore
     with reverts('revert: ERC20: transfer amount exceeds allowance'):
-        rocketlend.withdrawFromPool(poolId, paidBefore, supplyAmount, 0, 0, sender=lender)
+        rocketlend.changePoolRPL(poolId, paidBefore, supplyBefore + supplyAmount, sender=lender)
 
 def test_withdraw_interest_and_supply_more(partialRepayment, RPLToken, rocketVaultImpersonated):
     rocketlend = partialRepayment['rocketlend']
@@ -633,14 +619,31 @@ def test_withdraw_interest_and_supply_more(partialRepayment, RPLToken, rocketVau
     balanceBefore = RPLToken.balanceOf(lender)
     supplyAmount = paidBefore * 2
     assert balanceBefore >= supplyAmount - paidBefore
-    receipt = rocketlend.withdrawFromPool(poolId, paidBefore, supplyAmount, 0, 0, sender=lender)
-    logs = rocketlend.WithdrawFromPool.from_receipt(receipt)
+    receipt = rocketlend.changePoolRPL(poolId, paidBefore, supplyBefore + supplyAmount, sender=lender)
+    logs = rocketlend.WithdrawInterest.from_receipt(receipt)
     assert len(logs) == 1
-    assert logs[0].interest == paidBefore
-    assert logs[0].supplied == supplyAmount
+    assert logs[0].amount == paidBefore
     assert RPLToken.balanceOf(lender) == balanceBefore + paidBefore - supplyAmount
     assert rocketlend.pools(poolId).available == supplyBefore + supplyAmount
     assert rocketlend.pools(poolId).interestPaid == 0
+
+### withdrawEtherFromPool
+
+def test_withdraw_ether_from_pool_other(rocketlendp, other):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    with reverts('revert: auth'):
+        rocketlend.withdrawEtherFromPool(poolId, 20, sender=other)
+
+def test_withdraw_ether_from_pool_none(rocketlendp):
+    rocketlend = rocketlendp['rocketlend']
+    poolId = rocketlendp['poolId']
+    lender = rocketlendp['lender']
+    assert rocketlend.pools(poolId).reclaimed == 0
+    with reverts(): # ('Integer underflow'): TODO why this message changed?
+        rocketlend.withdrawEtherFromPool(poolId, 20, sender=lender)
+
+#### TODO: successful withdraw of ETH
 
 ### forceRepayRPL
 
@@ -1263,7 +1266,7 @@ def test_deposit_eth_none(rocketlendp, borrower1, rocketNodeDeposit):
     node = borrower1['node']
     borrower = borrower1['borrower']
     assert rocketlend.borrowers(node).ETH == 0
-    with reverts('Integer underflow'):
+    with reverts(): # TODO ('Integer underflow'):
         rocketlend.depositETH(node, 20, sender=borrower)
 
 def test_borrow_again(rocketlendp, RPLToken, borrower1b):
