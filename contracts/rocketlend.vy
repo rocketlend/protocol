@@ -233,7 +233,6 @@ event CreatePool:
 
 event SupplyPool:
   id: indexed(bytes32)
-  amount: indexed(uint256)
   total: indexed(uint256)
 
 event SetAllowance:
@@ -248,11 +247,9 @@ event ChangeAllowedToBorrow:
 
 event WithdrawETHFromPool:
   id: indexed(bytes32)
-  amount: indexed(uint256)
 
 event WithdrawRPLFromPool:
   id: indexed(bytes32)
-  amount: indexed(uint256)
 
 event WithdrawInterest:
   id: indexed(bytes32)
@@ -347,7 +344,7 @@ def createPool(_params: PoolParams, _supply: uint256, _allowance: uint256, _borr
   if 0 < _supply:
     assert extcall RPL.transferFrom(msg.sender, self, _supply), "tf"
     self.pools[poolId].available += _supply
-    log SupplyPool(poolId, _supply, self.pools[poolId].available)
+    log SupplyPool(poolId, self.pools[poolId].available)
   if 0 < _allowance:
     self.pools[poolId].allowance = _allowance
     log SetAllowance(poolId, 0, _allowance)
@@ -374,19 +371,24 @@ def changePoolRPL(_poolId: bytes32,
     requireLender = True
     self.pools[_poolId].interestPaid -= _withdrawInterest
     self.pools[_poolId].available += _withdrawInterest
+    log WithdrawInterest(_poolId, _withdrawInterest)
   currentSupply: uint256 = self.pools[_poolId].available
   if _targetSupply < currentSupply:
     requireLender = True
     assert extcall RPL.transfer(msg.sender, currentSupply - _targetSupply), "t"
+    log WithdrawRPLFromPool(_poolId)
   elif currentSupply < _targetSupply:
     assert extcall RPL.transferFrom(msg.sender, self, _targetSupply - currentSupply), "tf"
+    log SupplyPool(_poolId, _targetSupply)
   if requireLender:
     self._checkFromLender(_poolId)
   self.pools[_poolId].available = _targetSupply
 
+@external
 def withdrawEtherFromPool(_poolId: bytes32, _amount: uint256):
   self._checkFromLender(_poolId)
   self.pools[_poolId].reclaimed -= _amount
+  log WithdrawETHFromPool(_poolId)
   send(msg.sender, _amount, gas=msg.gas)
 
 addressMask: constant(uint256) = ~0 >> (32 - 20)
@@ -399,6 +401,7 @@ def changeAllowedToBorrow(_poolId: bytes32, _borrowers: DynArray[uint256, MAX_AD
     node: address = convert(arg & addressMask, address)
     allowed: bool = convert(arg & allowedBit, bool)
     self.allowedToBorrow[_poolId][node] = allowed
+    log ChangeAllowedToBorrow(_poolId, node, allowed)
 
 @external
 def setAllowance(_poolId: bytes32, _allowance: uint256):
