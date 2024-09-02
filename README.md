@@ -187,10 +187,6 @@ Vyper), chosen to be large enough to be practically unlimited.
     - bit 1: set `rewardsOnly` to false when distributing
     - bit 2: refund this minipool
 
-- `BorrowerArgument`
-  - `node: address`
-  - `allowed: bool`
-
 ### Views
 
 - `nextLenderId() → uint256`: the first unassigned lender identifier
@@ -211,7 +207,10 @@ Vyper), chosen to be large enough to be practically unlimited.
 - `changeLenderAddress(_lender: uint256, _newAddress: address, _confirm: bool)`
 - `confirmChangeLenderAddress(_lender: uint256)`
 - `createPool(_params: PoolParams, _supply: uint256, _allowance: uint256, _borrowers: DynArray[address, MAX_ADDRESS_BATCH]) → bytes32`
-- `changePool(_poolId: bytes32, _interest: uint256, _supply: uint256, _allowance: uint256, _borrowers: DynArray[BorrowerArgument, MAX_ADDRESS_BATCH], _withdrawRPL: uint256, _withdrawETH: uint256)`
+- `changePoolRPL(_poolId: bytes32, _withdrawInterest: uint256, _targetSupply: uint256)`: can be called by anyone if only supplying
+- `withdrawEtherFromPool(_poolId: bytes32, _amount: uint256)`
+- `changeAllowedToBorrow(_poolId: bytes32, _borrowers: DynArray[uint256, MAX_ADDRESS_BATCH])`
+- `setAllowance(_poolId: bytes32, _allowance: uint256)`
 - `updateInterestDue(_poolId: bytes32, _node: address)`: can be called by anyone
 - `forceRepayRPL(_poolId: bytes32, _node: address, _unstakeAmount: uint256)`: can be called by anyone
 - `forceRepayETH(_poolId: bytes32, _node: address)`
@@ -254,7 +253,6 @@ Vyper), chosen to be large enough to be practically unlimited.
     - `params: PoolParams`
 - `SupplyPool`
     - `id: indexed(bytes32)`
-    - `amount: indexed(uint256)`
     - `total: indexed(uint256)`
 - `SetAllowance`
     - `id: indexed(bytes32)`
@@ -262,14 +260,12 @@ Vyper), chosen to be large enough to be practically unlimited.
     - `new: indexed(uint256)`
 - `ChangeAllowedToBorrow`
     - `id: indexed(bytes32)`
+    - `node: indexed(address)`
     - `allowed: indexed(bool)`
-    - `nodes: DynArray[address, MAX_ADDRESS_BATCH]`
 - `WithdrawETHFromPool`
     - `id: indexed(bytes32)`
-    - `amount: indexed(uint256)`
 - `WithdrawRPLFromPool`
     - `id: indexed(bytes32)`
-    - `amount: indexed(uint256)`
 - `WithdrawInterest`
     - `id: indexed(bytes32)`
     - `amount: indexed(uint256)`
