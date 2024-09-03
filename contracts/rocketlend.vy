@@ -201,7 +201,6 @@ struct PoolItem:
 # the index of the start and the end of a linked list is 0 (i.e. last item's next == 0, and first item is the next of index 0)
 # the element at index 0 is a sentinel: it stores the next unused item index, i.e. poolId == convert(len(nextIndex), bytes32)
 debtPools: public(HashMap[address, HashMap[uint256, PoolItem]]) # linked list of pools in which a borrower has non-zero debt, sorted by end time, earliest first
-untilList: public(HashMap[address, HashMap[uint256, PoolItem]]) # same linked list items as above, but sorted by accountedUntil time, earliest first
 
 # assumes _poolId is active for _node, but checks _prev is the right item to insert it after
 @internal
@@ -222,25 +221,6 @@ def _removeDebtPool(_node: address, _poolId: bytes32, _prev: uint256):
   nextIndex: uint256 = self.debtPools[_node][index].next
   self.debtPools[_node][_prev].next = nextIndex
   self.debtPools[_node][index].next = index
-
-@internal
-def _insertUntilList(_node: address, _poolId: bytes32, _prev: uint256):
-  newIndex: uint256 = convert(self.untilList[_node][0].poolId, uint256)
-  self.untilList[_node][0].poolId = convert(newIndex + 1, bytes32)
-  self.untilList[_node][newIndex].poolId = _poolId
-  assert self.loans[self.untilList[_node][_prev].poolId][_node].accountedUntil <= self.loans[_poolId][_node].accountedUntil or _prev == 0, "p"
-  nextIndex: uint256 = self.untilList[_node][_prev].next
-  assert self.loans[_poolId][_node].accountedUntil <= self.loans[self.untilList[_node][nextIndex].poolId][_node].accountedUntil or nextIndex == 0, "n"
-  self.untilList[_node][newIndex].next = nextIndex
-  self.untilList[_node][_prev].next = newIndex
-
-@internal
-def _removeUntilList(_node: address, _poolId: bytes32, _prev: uint256):
-  index: uint256 = self.untilList[_node][_prev].next
-  assert self.untilList[_node][index].poolId == _poolId, "i"
-  nextIndex: uint256 = self.untilList[_node][index].next
-  self.untilList[_node][_prev].next = nextIndex
-  self.untilList[_node][index].next = index
 
 oneRPL: immutable(uint256)
 oneEther: constant(uint256) = 10 ** 18
