@@ -239,24 +239,16 @@ def __default__():
 
 # Lender actions
 
-event RegisterLender:
-  id: indexed(uint256)
-  address: indexed(address)
+event RegisterLender: pass
 
 event PendingChangeLenderAddress:
-  id: indexed(uint256)
   old: indexed(address)
-  new: indexed(address)
 
 event ConfirmChangeLenderAddress:
-  id: indexed(uint256)
   old: indexed(address)
-  new: indexed(address)
-  oldPending: address
+  oldPending: indexed(address)
 
-event CreatePool:
-  id: indexed(bytes32)
-  params: PoolParams
+event CreatePool: pass
 
 event SupplyPool:
   id: indexed(bytes32)
@@ -265,78 +257,59 @@ event SupplyPool:
 event SetAllowance:
   id: indexed(bytes32)
   old: indexed(uint256)
-  new: indexed(uint256)
 
 event ChangeAllowedToBorrow:
   id: indexed(bytes32)
   node: indexed(address)
   allowed: indexed(bool)
 
-event WithdrawETHFromPool:
-  id: indexed(bytes32)
+event WithdrawETHFromPool: pass
 
-event WithdrawRPLFromPool:
-  id: indexed(bytes32)
+event WithdrawRPLFromPool: pass
 
-event WithdrawInterest:
-  id: indexed(bytes32)
-  amount: indexed(uint256)
+event WithdrawInterest: pass
 
 event ForceRepayRPL:
-  id: indexed(bytes32)
-  node: indexed(address)
-  withdrawn: indexed(uint256)
-  available: uint256
-  borrowed: uint256
-  interestDue: uint256
+  available: indexed(uint256)
+  borrowed: indexed(uint256)
+  interestDue: indexed(uint256)
 
 event ForceRepayETH:
-  id: indexed(bytes32)
-  node: indexed(address)
-  amount: indexed(uint256)
-  available: uint256
-  borrowed: uint256
-  interestDue: uint256
+  available: indexed(uint256)
+  borrowed: indexed(uint256)
+  interestDue: indexed(uint256)
+  amount: uint256
 
 event ForceClaimRewards:
-  id: indexed(bytes32)
-  node: indexed(address)
-  claimedRPL: uint256
-  claimedETH: uint256
-  repaidRPL: uint256
-  repaidETH: uint256
+  claimedRPL: indexed(uint256)
+  claimedETH: indexed(uint256)
   RPL: uint256
   ETH: uint256
   borrowed: uint256
   interestDue: uint256
 
 event ForceDistributeRefund:
-  id: indexed(bytes32)
-  node: indexed(address)
-  claimed: uint256
-  repaid: uint256
+  claimed: indexed(uint256)
+  repaid: indexed(uint256)
   available: uint256
   borrowed: uint256
   interestDue: uint256
 
 event ChargeInterest:
-  id: indexed(bytes32)
-  node: indexed(address)
-  charged: uint256
-  total: uint256
-  until: uint256
+  charged: indexed(uint256)
+  total: indexed(uint256)
 
 @external
 def registerLender() -> uint256:
   id: uint256 = self.nextLenderId
   self.lenderAddress[id] = msg.sender
   self.nextLenderId = id + 1
-  log RegisterLender(id, msg.sender)
+  log RegisterLender()
   return id
 
 @internal
 def _updateLenderAddress(_lender: uint256, _newAddress: address):
-  log ConfirmChangeLenderAddress(_lender, self.lenderAddress[_lender], _newAddress, self.pendingLenderAddress[_lender])
+  log ConfirmChangeLenderAddress(self.lenderAddress[_lender], self.pendingLenderAddress[_lender])
   self.pendingLenderAddress[_lender] = empty(address)
   self.lenderAddress[_lender] = _newAddress
 
@@ -346,7 +319,7 @@ def changeLenderAddress(_lender: uint256, _newAddress: address, _confirm: bool):
   if _confirm:
     self._updateLenderAddress(_lender, _newAddress)
   else:
-    log PendingChangeLenderAddress(_lender, self.pendingLenderAddress[_lender], _newAddress)
+    log PendingChangeLenderAddress(self.pendingLenderAddress[_lender])
     self.pendingLenderAddress[_lender] = _newAddress
 
 @external
@@ -367,14 +340,14 @@ def createPool(_params: PoolParams, _supply: uint256, _allowance: uint256, _borr
   assert msg.sender == self.lenderAddress[_params.lender], "auth"
   poolId: bytes32 = self._poolId(_params)
   self.params[poolId] = _params
-  log CreatePool(poolId, _params)
+  log CreatePool()
   if 0 < _supply:
     assert extcall RPL.transferFrom(msg.sender, self, _supply), "tf"
     self.pools[poolId].available += _supply
     log SupplyPool(poolId, self.pools[poolId].available)
   if 0 < _allowance:
     self.pools[poolId].allowance = _allowance
-    log SetAllowance(poolId, 0, _allowance)
+    log SetAllowance(poolId, 0)
   for node: address in _borrowers:
     self.allowedToBorrow[poolId][node] = True
     log ChangeAllowedToBorrow(poolId, node, True)
@@ -398,12 +371,12 @@ def changePoolRPL(_poolId: bytes32,
     requireLender = True
     self.pools[_poolId].interestPaid -= _withdrawInterest
     self.pools[_poolId].available += _withdrawInterest
-    log WithdrawInterest(_poolId, _withdrawInterest)
+    log WithdrawInterest()
   currentSupply: uint256 = self.pools[_poolId].available
   if _targetSupply < currentSupply:
     requireLender = True
     assert extcall RPL.transfer(msg.sender, currentSupply - _targetSupply), "t"
-    log WithdrawRPLFromPool(_poolId)
+    log WithdrawRPLFromPool()
   elif currentSupply < _targetSupply:
     assert extcall RPL.transferFrom(msg.sender, self, _targetSupply - currentSupply), "tf"
     log SupplyPool(_poolId, _targetSupply)
@@ -415,7 +388,7 @@ def changePoolRPL(_poolId: bytes32,
 def withdrawEtherFromPool(_poolId: bytes32, _amount: uint256):
   self._checkFromLender(_poolId)
   self.pools[_poolId].reclaimed -= _amount
-  log WithdrawETHFromPool(_poolId)
+  log WithdrawETHFromPool()
   send(msg.sender, _amount, gas=msg.gas)
 
 addressMask: constant(uint256) = ~0 >> (32 - 20)
@@ -433,7 +406,7 @@ def changeAllowedToBorrow(_poolId: bytes32, _borrowers: DynArray[uint256, MAX_AD
 @external
 def setAllowance(_poolId: bytes32, _allowance: uint256):
   self._checkFromLender(_poolId)
-  log SetAllowance(_poolId, self.pools[_poolId].allowance, _allowance)
+  log SetAllowance(_poolId, self.pools[_poolId].allowance)
   self.pools[_poolId].allowance = _allowance
 
 @external
@@ -459,7 +432,7 @@ def forceRepayRPL(_poolId: bytes32, _node: address, _prevIndex: uint256, _unstak
   available = self._payDebt(_poolId, _node, _prevIndex, available)
   assert available < self.borrowers[_node].RPL, "none"
   self.borrowers[_node].RPL = available
-  log ForceRepayRPL(_poolId, _node, _unstakeAmount, available, self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
+  log ForceRepayRPL(available, self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
 
 @external
 def forceRepayETH(_poolId: bytes32, _node: address, _prevIndex: uint256):
@@ -472,7 +445,7 @@ def forceRepayETH(_poolId: bytes32, _node: address, _prevIndex: uint256):
   assert 0 < reclaimedETH, "none"
   self.borrowers[_node].ETH = endAmountETH
   self.pools[_poolId].reclaimed += reclaimedETH
-  log ForceRepayETH(_poolId, _node, reclaimedETH, self.borrowers[_node].ETH, self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
+  log ForceRepayETH(self.borrowers[_node].ETH, self.borrowers[_node].borrowed, self.borrowers[_node].interestDue, reclaimedETH)
 
 @external
 def forceClaimMerkleRewards(
@@ -501,7 +474,7 @@ def forceClaimMerkleRewards(
     assert self._payDebt(_poolId, _node, _prevIndex, _repayETH // ethPerRpl) == 0, "ETH"
     self.borrowers[_node].ETH -= _repayETH
     self.pools[_poolId].reclaimed += _repayETH
-  log ForceClaimRewards(_poolId, _node, totalRPL, totalETH, _repayRPL, _repayETH,
+  log ForceClaimRewards(totalRPL, totalETH,
                         self.borrowers[_node].RPL, self.borrowers[_node].ETH,
                         self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
 
@@ -521,7 +494,7 @@ def forceDistributeRefund(_poolId: bytes32, _node: address, _prevIndex: uint256,
   assert 0 < reclaimedETH, "none"
   self.borrowers[_node].ETH = endAmountETH
   self.pools[_poolId].reclaimed += reclaimedETH
-  log ForceDistributeRefund(_poolId, _node, total, reclaimedETH, self.borrowers[_node].ETH,
+  log ForceDistributeRefund(total, reclaimedETH, self.borrowers[_node].ETH,
                             self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
 
 @internal
@@ -538,67 +511,42 @@ def _payDebt(_poolId: bytes32, _node: address, _prevIndex: uint256, _amount: uin
 # Borrower actions
 
 event UpdateBorrower:
-  node: indexed(address)
   old: indexed(address)
-  new: indexed(address)
 
-event JoinProtocol:
-  node: indexed(address)
+event JoinProtocol: pass
 
-event LeaveProtocol:
-  node: indexed(address)
+event LeaveProtocol: pass
 
 event UnstakeRPL:
-  node: indexed(address)
-  amount: indexed(uint256)
   total: indexed(uint256)
 
 event Borrow:
-  pool: indexed(bytes32)
-  node: indexed(address)
-  amount: indexed(uint256)
-  borrowed: uint256
-  interestDue: uint256
+  borrowed: indexed(uint256)
+  interestDue: indexed(uint256)
 
 event Repay:
-  pool: indexed(bytes32)
-  node: indexed(address)
   amount: indexed(uint256)
-  borrowed: uint256
-  interestDue: uint256
+  borrowed: indexed(uint256)
+  interestDue: indexed(uint256)
 
-event TransferDebt:
-  node: indexed(address)
-  fromPool: indexed(bytes32)
-  toPool: indexed(bytes32)
-  amount: uint256
-  interestDue: uint256
-  allowance: uint256
+event TransferDebt: pass
 
 event DistributeRefund:
-  node: indexed(address)
   amount: indexed(uint256)
   total: indexed(uint256)
 
 event ClaimRewards:
-  node: indexed(address)
   claimedRPL: indexed(uint256)
   claimedETH: indexed(uint256)
-  stakedRPL: uint256
   totalRPL: uint256
   totalETH: uint256
   index: uint256
 
 event Withdraw:
-  node: indexed(address)
-  amountRPL: indexed(uint256)
-  amountETH: indexed(uint256)
-  totalRPL: uint256
-  totalETH: uint256
+  totalRPL: indexed(uint256)
+  totalETH: indexed(uint256)
 
 event DepositETH:
-  node: indexed(address)
-  amount: indexed(uint256)
   total: indexed(uint256)
 
 @internal
@@ -608,7 +556,7 @@ def _checkFromBorrower(_node: address):
 @internal
 def _updateBorrowerAddress(_node: address, _newAddress: address):
   self.borrowers[_node].pending = empty(address)
-  log UpdateBorrower(_node, self.borrowers[_node].address, _newAddress)
+  log UpdateBorrower(self.borrowers[_node].address)
   self.borrowers[_node].address = _newAddress
 
 @external
@@ -651,7 +599,7 @@ def joinAsBorrower(_node: address):
   if staticcall rocketNodeStaking.getRPLLockingAllowed(_node):
     extcall rocketNodeStaking.setRPLLockingAllowed(_node, False)
   self._updateIndex(_node, staticcall self._getRewardsPool().getRewardIndex())
-  log JoinProtocol(_node)
+  log JoinProtocol()
 
 @external
 def leaveAsBorrower(_node: address):
@@ -662,7 +610,7 @@ def leaveAsBorrower(_node: address):
   extcall self._getRocketNodeManager().unsetRPLWithdrawalAddress(_node)
   self.borrowers[_node].address = empty(address)
   self.borrowers[_node].pending = empty(address)
-  log LeaveProtocol(_node)
+  log LeaveProtocol()
 
 @internal
 def _stakeRPLFor(_node: address, _amount: uint256):
@@ -686,7 +634,7 @@ def unstakeRPL(_node: address, _amount: uint256):
   self._checkFromBorrower(_node)
   extcall self._getRocketNodeStaking().withdrawRPL(_node, _amount)
   self.borrowers[_node].RPL += _amount
-  log UnstakeRPL(_node, _amount, self.borrowers[_node].RPL)
+  log UnstakeRPL(self.borrowers[_node].RPL)
 
 @internal
 @view
@@ -712,7 +660,7 @@ def _chargeInterest(_poolId: bytes32, _node: address):
     self.loans[_poolId][_node].interestDue += amount
     self.borrowers[_node].interestDue += amount
   self.loans[_poolId][_node].accountedUntil = block.timestamp
-  log ChargeInterest(_poolId, _node, amount, self.borrowers[_node].interestDue, block.timestamp)
+  log ChargeInterest(amount, self.borrowers[_node].interestDue)
 
 @internal
 def _removeDebtPoolIfNeeded(_node: address, _poolId: bytes32, _prevIndex: uint256):
@@ -798,8 +746,7 @@ def borrow(_poolId: bytes32, _node: address, _prevIndex: uint256, _amount: uint2
   self._lend(_poolId, _node, _amount)
   assert 0 < self.loans[_poolId][_node].borrowed or 0 < self.loans[_poolId][_node].interestDue, "none"
   self._checkBorrowLimit(_node)
-  log Borrow(_poolId, _node, _amount,
-             self.loans[_poolId][_node].borrowed,
+  log Borrow(self.loans[_poolId][_node].borrowed,
              self.loans[_poolId][_node].interestDue)
 
 @external
@@ -822,7 +769,7 @@ def repay(_poolId: bytes32, _node: address, _prevIndex: uint256, _unstakeAmount:
     assert extcall RPL.transferFrom(msg.sender, self, target - obtained), "tf"
     obtained = target
   assert self._payDebt(_poolId, _node, _prevIndex, obtained) == 0, "over"
-  log Repay(_poolId, _node, obtained,
+  log Repay(obtained,
             self.loans[_poolId][_node].borrowed,
             self.loans[_poolId][_node].interestDue)
 
@@ -862,7 +809,7 @@ def transferDebt(_node: address,
     self._payDebt(_fromPool, _node, _fromPrevIndex, _fromAvailable)
   else:
     self._removeDebtPoolIfNeeded(_node, _fromPool, _fromPrevIndex)
-  log TransferDebt(_node, _fromPool, _toPool, _fromAvailable, _fromInterest, _fromAllowance)
+  log TransferDebt()
 
 @internal
 def _claimMerkleRewards(
@@ -908,7 +855,7 @@ def claimMerkleRewards(
   totalRPL: uint256 = 0
   totalETH: uint256 = 0
   totalRPL, totalETH = self._claimMerkleRewards(_node, _rewardIndex, _amountRPL, _amountETH, _merkleProof, _stakeAmount)
-  log ClaimRewards(_node, totalRPL, totalETH, _stakeAmount, self.borrowers[_node].RPL, self.borrowers[_node].ETH, self.borrowers[_node].index)
+  log ClaimRewards(totalRPL, totalETH, self.borrowers[_node].RPL, self.borrowers[_node].ETH, self.borrowers[_node].index)
 
 flag MinipoolAction:
   Distribute
@@ -965,7 +912,7 @@ def distributeRefund(_node: address,
     self._checkFromBorrower(_node)
   total: uint256 = self._claim(_node, _distribute, _minipools)
   self.borrowers[_node].ETH += total
-  log DistributeRefund(_node, total, self.borrowers[_node].ETH)
+  log DistributeRefund(total, self.borrowers[_node].ETH)
 
 @external
 def withdraw(_node: address, _amountRPL: uint256, _amountETH: uint256):
@@ -980,11 +927,11 @@ def withdraw(_node: address, _amountRPL: uint256, _amountETH: uint256):
     self.borrowers[_node].ETH -= _amountETH
     self._checkBorrowLimit2(_node)
     send(msg.sender, _amountETH, gas=msg.gas)
-  log Withdraw(_node, _amountRPL, _amountETH, self.borrowers[_node].RPL, self.borrowers[_node].ETH)
+  log Withdraw(self.borrowers[_node].RPL, self.borrowers[_node].ETH)
 
 @external
 def depositETH(_node: address, _amount: uint256):
   self._checkFromBorrower(_node)
   self.borrowers[_node].ETH -= _amount
   extcall self._getRocketNodeDeposit().depositEthFor(_node, value=_amount)
-  log DepositETH(_node, _amount, self.borrowers[_node].ETH)
+  log DepositETH(self.borrowers[_node].ETH)
