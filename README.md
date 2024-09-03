@@ -214,10 +214,10 @@ Vyper), chosen to be large enough to be practically unlimited.
 - `changeAllowedToBorrow(_poolId: bytes32, _borrowers: DynArray[uint256, MAX_ADDRESS_BATCH])`
 - `setAllowance(_poolId: bytes32, _allowance: uint256)`
 - `updateInterestDue(_poolId: bytes32, _node: address)`: can be called by anyone
-- `forceRepayRPL(_poolId: bytes32, _node: address, _unstakeAmount: uint256)`: can be called by anyone
-- `forceRepayETH(_poolId: bytes32, _node: address)`
-- `forceClaimMerkleRewards(_poolId: bytes32, _node: address, _repayRPL: uint256, _repayETH: uint256, _rewardIndex: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountRPL: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountETH: DynArray[uint256, MAX_CLAIM_INTERVALS], _merkleProof: DynArray[DynArray[bytes32, MAX_PROOF_LENGTH], MAX_CLAIM_INTERVALS])`
-- `forceDistributeRefund(_poolId: bytes32, _node: address, _distribute: bool, _minipools: DynArray[MinipoolArgument, MAX_NODE_MINIPOOLS])`
+- `forceRepayRPL(_poolId: bytes32, _node: address, _prevIndex: uint256, _unstakeAmount: uint256)`: can be called by anyone
+- `forceRepayETH(_poolId: bytes32, _node: address, _prevIndex: uint256)`
+- `forceClaimMerkleRewards(_poolId: bytes32, _node: address, _prevIndex: uint256, _repayRPL: uint256, _repayETH: uint256, _rewardIndex: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountRPL: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountETH: DynArray[uint256, MAX_CLAIM_INTERVALS], _merkleProof: DynArray[DynArray[bytes32, MAX_PROOF_LENGTH], MAX_CLAIM_INTERVALS])`
+- `forceDistributeRefund(_poolId: bytes32, _node: address, _prevIndex: uint256, _distribute: bool, _minipools: DynArray[MinipoolArgument, MAX_NODE_MINIPOOLS])`
 
 ### Borrower functions
 
@@ -229,8 +229,8 @@ Vyper), chosen to be large enough to be practically unlimited.
 - `setStakeRPLForAllowed(_node: address, _caller: address, _allowed: bool)`
 - `unstakeRPL(_node: address, _amount: uint256)`
 - `borrow(_poolId: bytes32, _node: address, _amount: uint256)`
-- `repay(_poolId: bytes32, _node: address, _unstakeAmount: uint256, _repayAmount: uint256)`
-- `transferDebt(_node: address, _fromPool: bytes32, _toPool: bytes32, _fromAvailable: uint256, _fromInterest: uint256, _fromAllowance: uint256)`
+- `repay(_poolId: bytes32, _node: address, _prevIndex: uint256, _unstakeAmount: uint256, _repayAmount: uint256)`
+- `transferDebt(_node: address, _fromPool: bytes32, _fromPrevIndex: uint256, _toPool: bytes32, _toPrevIndex: uint256, _fromAvailable: uint256, _fromInterest: uint256, _fromAllowance: uint256)`
 - `claimMerkleRewards(_node: address, _rewardIndex: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountRPL: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountETH: DynArray[uint256, MAX_CLAIM_INTERVALS], _merkleProof: DynArray[DynArray[bytes32, MAX_PROOF_LENGTH], MAX_CLAIM_INTERVALS], _stakeAmount: uint256)`
 - `distributeRefund(_node: address, _distribute: bool, _minipools: DynArray[MinipoolArgument, MAX_NODE_MINIPOOLS])`
 - `withdraw(_node: address, _amountRPL: uint256, _amountETH: uint256)`
