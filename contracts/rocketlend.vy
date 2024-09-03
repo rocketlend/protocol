@@ -392,8 +392,8 @@ def withdrawEtherFromPool(_poolId: bytes32, _amount: uint256):
   log WithdrawETHFromPool()
   send(msg.sender, _amount, gas=msg.gas)
 
-addressMask: constant(uint256) = ~0 >> (32 - 20)
-allowedBit: constant(uint256) = 1 << 20
+addressMask: constant(uint256) = ~0 >> 96
+allowedBit: constant(uint256) = 1 << 160
 
 @external
 def changeAllowedToBorrow(_poolId: bytes32, _borrowers: DynArray[uint256, MAX_ADDRESS_BATCH]):
