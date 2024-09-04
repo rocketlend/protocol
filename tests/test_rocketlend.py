@@ -267,14 +267,12 @@ def distributedRewards(rocketlend, nodeWithMPsJoined, rocketMinipoolManager, Con
 
 ## Views
 
-### nextLenderId
+### params
 
 def test_next_lender_id_incremented(rocketlendReg1):
     rocketlend = rocketlendReg1['rocketlend']
     prev_id = rocketlendReg1['lenderId']
-    assert rocketlend.nextLenderId() == prev_id + 1
-
-### params
+    assert rocketlend.params(0).lender == prev_id + 1
 
 def test_lender_set(rocketlendp):
     rocketlend = rocketlendp['rocketlend']
@@ -367,7 +365,7 @@ def test_RPL_token_address(rocketlend, RPLToken):
 ### registerLender
 
 def test_register_lender1(rocketlend, lender1):
-    nextId = rocketlend.nextLenderId()
+    nextId = rocketlend.params(0).lender
     assert nextId == 0
     receipt = rocketlend.registerLender(sender=lender1)
     assert receipt.return_value == nextId
