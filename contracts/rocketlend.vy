@@ -661,12 +661,6 @@ def _loanEmpty(_poolId: bytes32, _node: address) -> bool:
           self.loans[_poolId][_node].interestDue == 0)
 
 @internal
-def _insertDebtPoolIfNeeded(_node: address, _poolId: bytes32, _prevIndex: uint256):
-  if (self.loans[_poolId][_node].borrowed == 0 and
-      self.loans[_poolId][_node].interestDue == 0):
-    self._insertDebtPool(_node, _poolId, _prevIndex)
-
-@internal
 def _lend(_poolId: bytes32, _node: address, _amount: uint256):
   if 0 < _amount:
     assert (self.allowedToBorrow[_poolId][empty(address)] or
