@@ -882,7 +882,7 @@ def test_leave_with_debt(rocketlendp, borrower1b):
     rocketlend = rocketlendp['rocketlend']
     borrower = borrower1b['borrower']
     node = borrower1b['node']
-    with reverts('revert: b'):
+    with reverts('revert: bo'):
         rocketlend.leaveAsBorrower(node, sender=borrower)
 
 #### TODO: move into repay tests section

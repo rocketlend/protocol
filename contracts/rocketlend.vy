@@ -462,7 +462,7 @@ def forceClaimMerkleRewards(
     ):
   if 0 < _repayETH:
     self._checkFromLender(_poolId)
-  assert self.borrowers[_node].RPL < _repayRPL or self.borrowers[_node].ETH < _repayETH, "bal"
+  assert self.borrowers[_node].RPL < _repayRPL or self.borrowers[_node].ETH < _repayETH, "b"
   self._chargeAndCheckEndedOwing(_poolId, _node)
   totalRPL: uint256 = 0
   totalETH: uint256 = 0
@@ -506,7 +506,8 @@ def _payDebt(_poolId: bytes32, _node: address, _prevIndex: uint256, _amount: uin
   else:
     amount -= self._repayInterest(_poolId, _node, self.loans[_poolId][_node].interestDue)
     amount -= self._repay(_poolId, _node, min(amount, self.loans[_poolId][_node].borrowed))
-  self._removeDebtPoolIfNeeded(_node, _poolId, _prevIndex)
+  if self._emptyLoan(_poolId, _node):
+    self._removeDebtPool(_node, _poolId, _prevIndex)
   return amount
 
 # Borrower actions
@@ -563,7 +564,7 @@ def _updateBorrowerAddress(_node: address, _newAddress: address):
 @external
 def changeBorrowerAddress(_node: address, _newAddress: address, _confirm: bool):
   self._checkFromBorrower(_node)
-  assert _newAddress != empty(address), "null"
+  assert _newAddress != empty(address), "nu"
   if _confirm:
     self._updateBorrowerAddress(_node, _newAddress)
   else:
@@ -605,7 +606,7 @@ def joinAsBorrower(_node: address):
 @external
 def leaveAsBorrower(_node: address):
   assert msg.sender == self.borrowers[_node].address, "a"
-  assert self.borrowers[_node].borrowed == 0, "b"
+  assert self.borrowers[_node].borrowed == 0, "bo"
   assert self.borrowers[_node].interestDue == 0, "i"
   extcall rocketStorage.setWithdrawalAddress(_node, msg.sender, True)
   extcall self._getRocketNodeManager().unsetRPLWithdrawalAddress(_node)
@@ -664,10 +665,10 @@ def _chargeInterest(_poolId: bytes32, _node: address):
   log ChargeInterest(amount, self.borrowers[_node].interestDue)
 
 @internal
-def _removeDebtPoolIfNeeded(_node: address, _poolId: bytes32, _prevIndex: uint256):
-  if (self.loans[_poolId][_node].borrowed == 0 and
-      self.loans[_poolId][_node].interestDue == 0):
-    self._removeDebtPool(_node, _poolId, _prevIndex)
+@view
+def _emptyLoan(_poolId: bytes32, _node: address) -> bool:
+  return (self.loans[_poolId][_node].borrowed == 0 and
+          self.loans[_poolId][_node].interestDue == 0)
 
 @internal
 def _insertDebtPoolIfNeeded(_node: address, _poolId: bytes32, _prevIndex: uint256):
@@ -734,7 +735,8 @@ def borrow(_poolId: bytes32, _node: address, _prevIndex: uint256, _amount: uint2
   self._checkFromBorrower(_node)
   assert block.timestamp < self.params[_poolId].endTime, "e"
   self._stakeRPLFor(_node, _amount)
-  self._insertDebtPoolIfNeeded(_node, _poolId, _prevIndex)
+  if self._emptyLoan(_poolId, _node):
+    self._insertDebtPool(_node, _poolId, _prevIndex)
   self._chargeInterest(_poolId, _node)
   self._lend(_poolId, _node, _amount)
   assert 0 < self.loans[_poolId][_node].borrowed or 0 < self.loans[_poolId][_node].interestDue, "no"
@@ -782,8 +784,10 @@ def transferDebt(_node: address,
     ), "a"
   self._chargeInterest(_fromPool, _node)
   assert block.timestamp < self.params[_toPool].endTime, "e"
-  if 0 < _fromInterest or 0 < _fromAllowance or 0 < _fromAvailable:
-    self._insertDebtPoolIfNeeded(_node, _toPool, _toPrevIndex)
+  if self._emptyLoan(_toPool, _node) and (0 < _fromInterest or
+                                          0 < _fromAllowance or
+                                          0 < _fromAvailable):
+    self._insertDebtPool(_node, _toPool, _toPrevIndex)
   if 0 < _fromInterest:
     assert self.params[_fromPool].lender == self.params[_toPool].lender, "l"
     self.pools[_toPool].allowance -= _fromInterest
@@ -799,8 +803,8 @@ def transferDebt(_node: address,
   if 0 < _fromAvailable:
     self._lend(_toPool, _node, _fromAvailable)
     self._payDebt(_fromPool, _node, _fromPrevIndex, _fromAvailable)
-  else:
-    self._removeDebtPoolIfNeeded(_node, _fromPool, _fromPrevIndex)
+  elif self._emptyLoan(_fromPool, _node):
+    self._removeDebtPool(_node, _fromPool, _fromPrevIndex)
   log TransferDebt()
 
 @internal
