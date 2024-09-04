@@ -865,20 +865,21 @@ def _claim(
   _args: DynArray[MinipoolArgument, MAX_NODE_MINIPOOLS],
 ) -> uint256:
   total: uint256 = 0
+  balance: uint256 = self.balance
   if _dist:
     distributor: RocketNodeDistributorInterface = self._getNodeDistributor(_node)
     nodeShare: uint256 = staticcall distributor.getNodeShare()
     self.borrowers[_node].ETH += nodeShare
-    amount: uint256 = self.balance
     self.allowPaymentsFrom = distributor.address
     extcall distributor.distribute()
-    assert amount + nodeShare == self.balance, "bal"
+    assert balance + nodeShare == self.balance, "b"
     total += nodeShare
   if len(_args) == 0:
+    self.allowPaymentsFrom = empty(address)
     return total
   minipool: address = empty(address)
   manager: RocketMinipoolManagerInterface = self._getMinipoolManager()
-  balance: uint256 = self.balance
+  balance = self.balance
   for arg: MinipoolArgument in _args:
     minipool = staticcall manager.getNodeMinipoolAt(_node, arg.index)
     self.allowPaymentsFrom = minipool
