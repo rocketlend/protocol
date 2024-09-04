@@ -71,7 +71,7 @@ Borrowers can use the Rocket Lend contract to:
 - Register as a borrower in the protocol by confirming their node's primary and
   RPL withdrawal addresses as the Rocket Lend contract
 - Change their (Rocket Lend) borrower address
-- Stake RPL from a pool onto their node
+- Stake RPL from a pool (i.e. borrow it) onto their node
 - Repay a pool by withdrawing RPL from their node
 - Repay a pool by supplying fresh RPL - this may also be done by a third party
   on the borrower's behalf
@@ -89,8 +89,8 @@ Borrowers can use the Rocket Lend contract to:
   must cover the borrower's total debt (including interest), and the available
   ETH must be sufficient for the borrow limit check (described below).
   Withdrawal is disallowed if the borrower has debt in an expired pool.
-- Deposit ETH from their balance in Rocket Lend back onto their Rocket Pool
-  node
+- Stake RPL from their balance in Rocket Lend back onto their node
+- Deposit ETH from their balance in Rocket Lend back onto their node
 - Exit Rocket Lend by changing their node's primary and RPL withdrawal
   addresses
 
@@ -225,7 +225,6 @@ Vyper), chosen to be large enough to be practically unlimited.
 - `confirmChangeBorrowerAddress(_node: address)`
 - `joinAsBorrower(_node: address)`
 - `leaveAsBorrower(_node: address)`
-- `stakeRPLFor(_node: address, _amount: uint256)`
 - `setStakeRPLForAllowed(_node: address, _caller: address, _allowed: bool)`
 - `unstakeRPL(_node: address, _amount: uint256)`
 - `borrow(_poolId: bytes32, _node: address, _amount: uint256)`
@@ -234,7 +233,8 @@ Vyper), chosen to be large enough to be practically unlimited.
 - `claimMerkleRewards(_node: address, _rewardIndex: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountRPL: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountETH: DynArray[uint256, MAX_CLAIM_INTERVALS], _merkleProof: DynArray[DynArray[bytes32, MAX_PROOF_LENGTH], MAX_CLAIM_INTERVALS], _stakeAmount: uint256)`
 - `distributeRefund(_node: address, _distribute: bool, _minipools: DynArray[MinipoolArgument, MAX_NODE_MINIPOOLS])`
 - `withdraw(_node: address, _amountRPL: uint256, _amountETH: uint256)`
-- `depositETH(_node: address, _amount: uint256)`
+- `stakeRPLFor(_node: address, _amount: uint256)`
+- `depositETHFor(_node: address, _amount: uint256)`
 
 ### Events
 
@@ -359,9 +359,9 @@ Vyper), chosen to be large enough to be practically unlimited.
     - `amountETH: indexed(uint256)`
     - `totalRPL: uint256`
     - `totalETH: uint256`
-- `DepositETH`
-    - `node: indexed(address)`
-    - `amount: indexed(uint256)`
+- `StakeRPLFor`
+    - `total: indexed(uint256)`
+- `DepositETHFor`
     - `total: indexed(uint256)`
 
 ## Additional Information

@@ -536,7 +536,10 @@ event Withdraw:
   totalRPL: indexed(uint256)
   totalETH: indexed(uint256)
 
-event DepositETH:
+event StakeRPLFor:
+  total: indexed(uint256)
+
+event DepositETHFor:
   total: indexed(uint256)
 
 @internal
@@ -607,12 +610,6 @@ def _stakeRPLFor(_node: address, _amount: uint256):
   rocketNodeStaking: RocketNodeStakingInterface = self._getRocketNodeStaking()
   assert extcall RPL.approve(rocketNodeStaking.address, _amount), "ap"
   extcall rocketNodeStaking.stakeRPLFor(_node, _amount)
-
-@external
-def stakeRPLFor(_node: address, _amount: uint256):
-  self._checkFromBorrower(_node)
-  assert extcall RPL.transferFrom(msg.sender, self, _amount), "tf"
-  self._stakeRPLFor(_node, _amount)
 
 @external
 def setStakeRPLForAllowed(_node: address, _caller: address, _allowed: bool):
@@ -900,8 +897,15 @@ def withdraw(_node: address, _amountRPL: uint256, _amountETH: uint256):
   log Withdraw(self.borrowers[_node].RPL, self.borrowers[_node].ETH)
 
 @external
-def depositETH(_node: address, _amount: uint256):
+def stakeRPLFor(_node: address, _amount: uint256):
+  self._checkFromBorrower(_node)
+  self.borrowers[_node].RPL -= _amount
+  self._stakeRPLFor(_node, _amount)
+  log StakeRPLFor(self.borrowers[_node].RPL)
+
+@external
+def depositETHFor(_node: address, _amount: uint256):
   self._checkFromBorrower(_node)
   self.borrowers[_node].ETH -= _amount
   extcall self._getRocketNodeDeposit().depositEthFor(_node, value=_amount)
-  log DepositETH(self.borrowers[_node].ETH)
+  log DepositETHFor(self.borrowers[_node].ETH)

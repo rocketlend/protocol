@@ -750,9 +750,9 @@ def test_change_borrower_to_empty(borrower1):
     rocketlend = borrower1['rocketlend']
     node = borrower1['node']
     borrower = borrower1['borrower']
-    with reverts('revert: null'):
+    with reverts('revert: nu'):
         rocketlend.changeBorrowerAddress(node, nullAddress, False, sender=borrower)
-    with reverts('revert: null'):
+    with reverts('revert: nu'):
         rocketlend.changeBorrowerAddress(node, nullAddress, True, sender=borrower)
 
 def test_change_borrower_to_other(borrower1, other):
@@ -948,39 +948,41 @@ def test_stake_rpl_for_other(borrower1, other):
     with reverts('revert: a'):
         rocketlend.stakeRPLFor(node, 20, sender=node)
 
-def test_stake_rpl_for_not_approved(borrower1b, RPLToken, rocketVaultImpersonated):
-    rocketlend = borrower1b['rocketlend']
-    node = borrower1b['node']
-    borrower = borrower1b['borrower']
-    amount = 10 * 10 ** RPLToken.decimals()
-    grab_RPL(borrower, amount, RPLToken, rocketVaultImpersonated, None)
-    assert RPLToken.allowance(borrower, rocketlend) < amount
-    with reverts('revert: ERC20: transfer amount exceeds allowance'):
-        rocketlend.stakeRPLFor(node, amount, sender=borrower)
+#### TODO: tests for new semantics of stakeRPLFor which uses Rocket Lend balance
 
-def test_stake_rpl_for_too_much(borrower1b, RPLToken, rocketVaultImpersonated):
-    rocketlend = borrower1b['rocketlend']
-    node = borrower1b['node']
-    borrower = borrower1b['borrower']
-    amount = 10 * 10 ** RPLToken.decimals()
-    RPLToken.approve(rocketlend, amount, sender=borrower)
-    assert RPLToken.balanceOf(borrower) < amount
-    with reverts('revert: ERC20: transfer amount exceeds balance'):
-        rocketlend.stakeRPLFor(node, amount, sender=borrower)
-
-def test_stake_rpl_for(borrower1b, RPLToken, rocketNodeStaking, rocketVaultImpersonated):
-    rocketlend = borrower1b['rocketlend']
-    node = borrower1b['node']
-    borrower = borrower1b['borrower']
-    amount = 20 * 10 ** RPLToken.decimals()
-    grab_RPL(borrower, amount, RPLToken, rocketVaultImpersonated, rocketlend)
-    prev_balance = RPLToken.balanceOf(borrower)
-    prev_RPL = rocketlend.borrowers(node).RPL
-    prev_stake = rocketNodeStaking.getNodeRPLStake(node)
-    receipt = rocketlend.stakeRPLFor(node, amount, sender=borrower)
-    assert RPLToken.balanceOf(borrower) == prev_balance - amount
-    assert rocketlend.borrowers(node).RPL == prev_RPL
-    assert rocketNodeStaking.getNodeRPLStake(node) == prev_stake + amount
+# def test_stake_rpl_for_not_approved(borrower1b, RPLToken, rocketVaultImpersonated):
+#     rocketlend = borrower1b['rocketlend']
+#     node = borrower1b['node']
+#     borrower = borrower1b['borrower']
+#     amount = 10 * 10 ** RPLToken.decimals()
+#     grab_RPL(borrower, amount, RPLToken, rocketVaultImpersonated, None)
+#     assert RPLToken.allowance(borrower, rocketlend) < amount
+#     with reverts('revert: ERC20: transfer amount exceeds allowance'):
+#         rocketlend.stakeRPLFor(node, amount, sender=borrower)
+#
+# def test_stake_rpl_for_too_much(borrower1b, RPLToken, rocketVaultImpersonated):
+#     rocketlend = borrower1b['rocketlend']
+#     node = borrower1b['node']
+#     borrower = borrower1b['borrower']
+#     amount = 10 * 10 ** RPLToken.decimals()
+#     RPLToken.approve(rocketlend, amount, sender=borrower)
+#     assert RPLToken.balanceOf(borrower) < amount
+#     with reverts('revert: ERC20: transfer amount exceeds balance'):
+#         rocketlend.stakeRPLFor(node, amount, sender=borrower)
+#
+# def test_stake_rpl_for(borrower1b, RPLToken, rocketNodeStaking, rocketVaultImpersonated):
+#     rocketlend = borrower1b['rocketlend']
+#     node = borrower1b['node']
+#     borrower = borrower1b['borrower']
+#     amount = 20 * 10 ** RPLToken.decimals()
+#     grab_RPL(borrower, amount, RPLToken, rocketVaultImpersonated, rocketlend)
+#     prev_balance = RPLToken.balanceOf(borrower)
+#     prev_RPL = rocketlend.borrowers(node).RPL
+#     prev_stake = rocketNodeStaking.getNodeRPLStake(node)
+#     receipt = rocketlend.stakeRPLFor(node, amount, sender=borrower)
+#     assert RPLToken.balanceOf(borrower) == prev_balance - amount
+#     assert rocketlend.borrowers(node).RPL == prev_RPL
+#     assert rocketNodeStaking.getNodeRPLStake(node) == prev_stake + amount
 
 ### setStakeRPLForAllowed
 #### TODO
@@ -1238,13 +1240,13 @@ def test_withdraw_too_much_RPL(rocketlendp, borrower1b, chain):
 
 #### TODO: test withdrawing ETH
 
-### depositETH
+### depositETHFor
 
 def test_deposit_eth_other(rocketlendp, borrower1, other):
     rocketlend = rocketlendp['rocketlend']
     node = borrower1['node']
     with reverts('revert: a'):
-        rocketlend.depositETH(node, 20, sender=other)
+        rocketlend.depositETHFor(node, 20, sender=other)
 
 def test_deposit_eth_none(rocketlendp, borrower1, rocketNodeDeposit):
     rocketlend = rocketlendp['rocketlend']
@@ -1252,7 +1254,7 @@ def test_deposit_eth_none(rocketlendp, borrower1, rocketNodeDeposit):
     borrower = borrower1['borrower']
     assert rocketlend.borrowers(node).ETH == 0
     with reverts(): # TODO ('Integer underflow'):
-        rocketlend.depositETH(node, 20, sender=borrower)
+        rocketlend.depositETHFor(node, 20, sender=borrower)
 
 def test_borrow_again(rocketlendp, RPLToken, borrower1b):
     rocketlend = rocketlendp['rocketlend']
@@ -1278,8 +1280,8 @@ def test_deposit_eth(distributedRewards, rocketNodeDeposit, accounts):
     prev_balance = rocketlend.borrowers(node).ETH
     assert amount < prev_balance
     prev_rp_balance = rocketNodeDeposit.getNodeEthBalance(node)
-    receipt = rocketlend.depositETH(node, amount, sender=borrower)
-    logs = rocketlend.DepositETH.from_receipt(receipt)
+    receipt = rocketlend.depositETHFor(node, amount, sender=borrower)
+    logs = rocketlend.DepositETHFor.from_receipt(receipt)
     assert len(logs) == 1
     assert amount == rocketNodeDeposit.getNodeEthBalance(node) - prev_rp_balance
     assert amount == prev_balance - rocketlend.borrowers(node).ETH
