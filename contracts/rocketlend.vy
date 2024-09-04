@@ -220,14 +220,12 @@ def _removeDebtPool(_node: address, _poolId: bytes32, _prev: uint256):
   self.debtPools[_node][_prev].next = nextIndex
   self.debtPools[_node][index].next = index
 
-oneRPL: immutable(uint256)
 oneEther: constant(uint256) = 10 ** 18
 
 @deploy
 def __init__(_rocketStorage: address):
   rocketStorage = RocketStorageInterface(_rocketStorage)
   RPL = RPLInterface(staticcall rocketStorage.getAddress(keccak256("contract.addressrocketTokenRPL")))
-  oneRPL = 10 ** convert(staticcall RPL.decimals(), uint256)
 
 allowPaymentsFrom: address
 @external
