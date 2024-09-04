@@ -153,8 +153,6 @@ def _getMinipoolManager() -> RocketMinipoolManagerInterface:
     staticcall rocketStorage.getAddress(rocketMinipoolManagerKey)
   )
 
-nextLenderId: public(uint256)
-
 lenderAddress: public(HashMap[uint256, address])
 pendingLenderAddress: public(HashMap[uint256, address])
 
@@ -299,9 +297,9 @@ event ChargeInterest:
 
 @external
 def registerLender() -> uint256:
-  id: uint256 = self.nextLenderId
+  id: uint256 = self.params[empty(bytes32)].lender
   self.lenderAddress[id] = msg.sender
-  self.nextLenderId = id + 1
+  self.params[empty(bytes32)].lender = id + 1
   log RegisterLender()
   return id
 
