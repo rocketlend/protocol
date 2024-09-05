@@ -123,20 +123,20 @@ Lenders can use the Rocket Lend contract to:
 - Create a new lending pool with their chosen parameters
 - Restrict or expand the set of borrowers that are allowed to borrow RPL from
   one of their lending pools
-- Supply RPL to one of their lending pools - this may also be done by a third
-  party on the lender's behalf
 - Set the allowance for transfers of debt into one of their lending pools from
   their other lending pools
-- Withdraw RPL that is not currently borrowed, and/or ETH that was reclaimed
-  from a default, from one of their lending pools
-- Withdraw any interest paid to one of their lending pools, and optionally
-  supply it back to the pool
-- Withdraw any remaining defaulted debt (borrowed RPL plus interest) from a
-  node after the end time of the lending pool, as long as the RPL is
+- Supply RPL to one of their lending pools - this may also be done by a third
+  party on the lender's behalf
+- Withdraw RPL that is not currently borrowed (including repayments and
+  interest) from one of their lending pools
+- Withdraw ETH that was reclaimed from a default from one of their lending
+  pools
+- Unstake any remaining defaulted debt (borrowed RPL plus interest) from
+  a node after the end time of the lending pool, as long as the RPL is
   withdrawable from Rocket Pool
-- Force a claim/withdrawal of ETH or RPL from the node of a borrower that has
-  defaulted on a loan from one of the lender's pools, up to the outstanding
-  debt amount
+- Force a claim/withdrawal of ETH or RPL rewards from the node of a borrower
+  that has defaulted on a loan from one of the lender's pools, up to the
+  outstanding debt amount
 
 ## Contract API
 
@@ -165,7 +165,6 @@ Vyper), chosen to be large enough to be practically unlimited.
   - `available: uint256`: amount of RPL available to be borrowed or returned to the lender
   - `borrowed: uint256`: amount of RPL currently borrowed
   - `allowance: uint256`: limit on how much RPL can be made available by transferring either borrowed RPL from another of the lender's pools, or interest from another of the lender's loans
-  - `interestPaid: uint256`: interest the pool has accrued (available to be claimed by the lender)
   - `reclaimed: uint256`: amount of ETH accrued in service of defaults (available to be claimed by the lender)
 
 - `LoanState` (per pool id and node (borrower))
@@ -213,7 +212,7 @@ Vyper), chosen to be large enough to be practically unlimited.
 - `changeLenderAddress(_lender: uint256, _newAddress: address, _confirm: bool)`
 - `confirmChangeLenderAddress(_lender: uint256)`
 - `createPool(_params: PoolParams, _supply: uint256, _allowance: uint256, _borrowers: DynArray[address, MAX_ADDRESS_BATCH]) → bytes32`
-- `changePoolRPL(_poolId: bytes32, _withdrawInterest: uint256, _targetSupply: uint256)`: can be called by anyone if only supplying
+- `changePoolRPL(_poolId: bytes32, _targetSupply: uint256)`: can be called by anyone if only supplying
 - `withdrawEtherFromPool(_poolId: bytes32, _amount: uint256)`
 - `changeAllowedToBorrow(_poolId: bytes32, _borrowers: DynArray[uint256, MAX_ADDRESS_BATCH])`
 - `setAllowance(_poolId: bytes32, _allowance: uint256)`
@@ -263,7 +262,6 @@ Vyper), chosen to be large enough to be practically unlimited.
     - `allowed: indexed(bool)`
 - `WithdrawETHFromPool`
 - `WithdrawRPLFromPool`
-- `WithdrawInterest`
 - `ForceRepayRPL`
     - `available: indexed(uint256)`
     - `borrowed: indexed(uint256)`
