@@ -189,15 +189,19 @@ Vyper), chosen to be large enough to be practically unlimited.
     - bit 1: set `rewardsOnly` to false when distributing
     - bit 2: refund this minipool
 
+- `PoolItem`
+  - `next: uint256`
+  - `poolId: bytes32`
+
 ### Views
 
-- `nextLenderId() → uint256`: the first unassigned lender identifier
 - `params(id: bytes32) → PoolParams`
 - `pools(id: bytes32) → PoolState`
 - `loans(id: bytes32, node: address) → LoanState`
 - `allowedToBorrow(id: bytes32, node: address) → bool`: if the null address is allowed, anyone is
 - `borrowers(node: address) → BorrowerState`
 - `intervals(node: address, index: uint256) → bool`: whether a rewards interval index is known to be claimed
+- `debtPools(node: address, index: uint256) → PoolItem`
 - `lenderAddress(lender: uint256) → address`
 - `pendingLenderAddress(lender: uint256) → address`
 - `rocketStorage() → address`: the address of the Rocket Storage contract
