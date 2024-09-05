@@ -239,12 +239,14 @@ Vyper), chosen to be large enough to be practically unlimited.
 ### Events
 
 - `RegisterLender`
+    - `lender: indexed(uint256)`
 - `PendingChangeLenderAddress`
     - `old: indexed(address)`
 - `ConfirmChangeLenderAddress`
     - `old: indexed(address)`
     - `oldPending: indexed(address)`
 - `CreatePool`
+    - `id: bytes32`
 - `SupplyPool`
     - `id: indexed(bytes32)`
     - `total: indexed(uint256)`

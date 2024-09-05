@@ -371,6 +371,7 @@ def test_register_lender1(rocketlend, lender1):
     assert receipt.return_value == nextId
     logs = rocketlend.RegisterLender.from_receipt(receipt)
     assert len(logs) == 1
+    assert logs[0].lender == nextId
 
 ### changeLenderAddress
 ### confirmChangeLenderAddress
@@ -422,12 +423,14 @@ def test_create_expired_pool(rocketlendReg1, lender1):
     receipt = rocketlend.createPool(params, 0, 0, [0], sender=lender1)
     logs = rocketlend.CreatePool.from_receipt(receipt)
     assert len(logs) == 1
+    assert logs[0].id == receipt.return_value
 
 def test_create_pool(rocketlendf, lender2):
     params = dict(lender=1, interestRate=1, endTime=time_from_now(days=3))
     receipt = rocketlendf.createPool(params, 0, 0, [0], sender=lender2)
     logs = rocketlendf.CreatePool.from_receipt(receipt)
     assert len(logs) == 1
+    assert logs[0].id == receipt.return_value
 
 def test_create_pool_with_supply(rocketlendf, RPLToken, rocketVaultImpersonated, lender2):
     amount = 20 * 10 ** RPLToken.decimals()
@@ -436,6 +439,7 @@ def test_create_pool_with_supply(rocketlendf, RPLToken, rocketVaultImpersonated,
     receipt = rocketlendf.createPool(params, amount, 0, [0], sender=lender2)
     logs = rocketlendf.CreatePool.from_receipt(receipt)
     assert len(logs) == 1
+    assert logs[0].id == receipt.return_value
 
 ### setAllowance
 

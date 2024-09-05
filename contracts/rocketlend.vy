@@ -235,7 +235,8 @@ def __default__():
 
 # Lender actions
 
-event RegisterLender: pass
+event RegisterLender:
+  lender: indexed(uint256)
 
 event PendingChangeLenderAddress:
   old: indexed(address)
@@ -244,7 +245,8 @@ event ConfirmChangeLenderAddress:
   old: indexed(address)
   oldPending: indexed(address)
 
-event CreatePool: pass
+event CreatePool:
+  id: indexed(bytes32)
 
 event SupplyPool:
   id: indexed(bytes32)
@@ -298,7 +300,7 @@ def registerLender() -> uint256:
   id: uint256 = self.params[empty(bytes32)].lender
   self.lenderAddress[id] = msg.sender
   self.params[empty(bytes32)].lender = id + 1
-  log RegisterLender()
+  log RegisterLender(id)
   return id
 
 @internal
@@ -334,7 +336,7 @@ def createPool(_params: PoolParams, _supply: uint256, _allowance: uint256, _borr
   assert msg.sender == self.lenderAddress[_params.lender], "a"
   poolId: bytes32 = self._poolId(_params)
   self.params[poolId] = _params
-  log CreatePool()
+  log CreatePool(poolId)
   if 0 < _supply:
     assert extcall RPL.transferFrom(msg.sender, self, _supply), "tf"
     self.pools[poolId].available += _supply
