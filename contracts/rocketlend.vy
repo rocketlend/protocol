@@ -167,7 +167,6 @@ struct PoolState:
   available: uint256 # RPL available to be returned to the lender
   borrowed: uint256 # total RPL currently borrowed by borrowers
   allowance: uint256 # limit on RPL that can be made available by transferring borrowed from another of this lender's pools (or interest from another loan)
-  interestPaid: uint256 # interest paid to the pool (not yet claimed by lender)
   reclaimed: uint256 # ETH accrued (not yet returned to lender) in service of defaults
 
 pools: public(HashMap[bytes32, PoolState])
@@ -265,8 +264,6 @@ event WithdrawETHFromPool: pass
 
 event WithdrawRPLFromPool: pass
 
-event WithdrawInterest: pass
-
 event ForceRepayRPL:
   available: indexed(uint256)
   borrowed: indexed(uint256)
@@ -359,27 +356,17 @@ def _checkFromLender(_poolId: bytes32):
   assert msg.sender == self._lenderAddress(_poolId), "a"
 
 @external
-def changePoolRPL(_poolId: bytes32,
-                  _withdrawInterest: uint256,
-                  _targetSupply: uint256):
-  requireLender: bool = False
-  if 0 < _withdrawInterest:
-    requireLender = True
-    self.pools[_poolId].interestPaid -= _withdrawInterest
-    self.pools[_poolId].available += _withdrawInterest
-    log WithdrawInterest()
+def changePoolRPL(_poolId: bytes32, _targetSupply: uint256):
   currentSupply: uint256 = self.pools[_poolId].available
   if currentSupply != _targetSupply:
     if _targetSupply < currentSupply:
-      requireLender = True
+      self._checkFromLender(_poolId)
       assert extcall RPL.transfer(msg.sender, currentSupply - _targetSupply), "t"
       log WithdrawRPLFromPool()
     else:
       assert extcall RPL.transferFrom(msg.sender, self, _targetSupply - currentSupply), "tf"
       log SupplyPool(_poolId, _targetSupply)
     self.pools[_poolId].available = _targetSupply
-  if requireLender:
-    self._checkFromLender(_poolId)
 
 @external
 def withdrawEtherFromPool(_poolId: bytes32, _amount: uint256):
@@ -670,7 +657,7 @@ def _repayInterest(_poolId: bytes32, _node: address, _amount: uint256) -> uint25
   if 0 < _amount:
     self.loans[_poolId][_node].interestDue -= _amount
     self.borrowers[_node].interestDue -= _amount
-    self.pools[_poolId].interestPaid += _amount
+    self.pools[_poolId].available += _amount
   return _amount
 
 @internal
@@ -751,7 +738,7 @@ def transferDebt(_node: address,
                  _fromPool: bytes32, _fromPrevIndex: uint256,
                  _toPool: bytes32, _toPrevIndex: uint256,
                  _fromInterest: uint256,
-                 _fromAllowance: uint256,
+                 _fromBorrowed: uint256,
                  _fromAvailable: uint256):
   if msg.sender != self.borrowers[_node].address:
     # not from borrower allowed only if:
@@ -764,7 +751,7 @@ def transferDebt(_node: address,
   self._chargeInterest(_fromPool, _node)
   assert block.timestamp < self.params[_toPool].endTime, "e"
   if self._loanEmpty(_toPool, _node) and (0 < _fromInterest or
-                                          0 < _fromAllowance or
+                                          0 < _fromBorrowed or
                                           0 < _fromAvailable):
     self._insertDebtPool(_node, _toPool, _toPrevIndex)
   if 0 < _fromInterest:
@@ -772,13 +759,13 @@ def transferDebt(_node: address,
     self.pools[_toPool].allowance -= _fromInterest
     self.loans[_fromPool][_node].interestDue -= _fromInterest
     self.loans[_toPool][_node].interestDue += _fromInterest
-  if 0 < _fromAllowance:
+  if 0 < _fromBorrowed:
     assert self.params[_fromPool].lender == self.params[_toPool].lender, "l"
-    self.pools[_toPool].allowance -= _fromAllowance
-    self.loans[_fromPool][_node].borrowed -= _fromAllowance
-    self.loans[_toPool][_node].borrowed += _fromAllowance
-    self.pools[_fromPool].borrowed -= _fromAllowance
-    self.pools[_toPool].borrowed += _fromAllowance
+    self.pools[_toPool].allowance -= _fromBorrowed
+    self.loans[_fromPool][_node].borrowed -= _fromBorrowed
+    self.loans[_toPool][_node].borrowed += _fromBorrowed
+    self.pools[_fromPool].borrowed -= _fromBorrowed
+    self.pools[_toPool].borrowed += _fromBorrowed
   if 0 < _fromAvailable:
     self._lend(_toPool, _node, _fromAvailable)
     self._payDebt(_fromPool, _node, _fromPrevIndex, _fromAvailable)
