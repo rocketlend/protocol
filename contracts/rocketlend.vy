@@ -546,7 +546,7 @@ def _updateBorrowerAddress(_node: address, _newAddress: address):
 @external
 def changeBorrowerAddress(_node: address, _newAddress: address, _confirm: bool):
   self._checkFromBorrower(_node)
-  assert _newAddress != empty(address), "nu"
+  assert _newAddress != empty(address), "nu" # we use empty(address) to signify a node has not joined
   if _confirm:
     self._updateBorrowerAddress(_node, _newAddress)
   else:
