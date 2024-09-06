@@ -777,6 +777,7 @@ def test_join_protocol(rocketlendp, node1, rocketStorage, accounts):
     receipt = rocketlend.joinAsBorrower(node1, sender=current_wa)
     logs = rocketlend.JoinProtocol.from_receipt(receipt)
     assert len(logs) == 1
+    assert logs[0].borrower == current_wa
     assert rocketlend.borrowers(node1).address == current_wa
 
 def test_join_protocol_rplwa_set(rocketlendp, node1, rocketStorage, rocketNodeManager, accounts, other):
@@ -800,6 +801,7 @@ def test_join_protocol_wa_set(rocketlendp, node1, rocketStorage, accounts):
     receipt = rocketlend.joinAsBorrower(node1, sender=node1)
     logs = rocketlend.JoinProtocol.from_receipt(receipt)
     assert len(logs) == 1
+    assert logs[0].borrower == node1
     assert rocketlend.borrowers(node1).address == node1
 
 def test_join_protocol_other(rocketlendp, node1, rocketStorage, other, accounts):
@@ -809,6 +811,7 @@ def test_join_protocol_other(rocketlendp, node1, rocketStorage, other, accounts)
     receipt = rocketlend.joinAsBorrower(node1, sender=other)
     logs = rocketlend.JoinProtocol.from_receipt(receipt)
     assert len(logs) == 1
+    assert logs[0].borrower == current_wa
     assert rocketlend.borrowers(node1).address == current_wa
 
 def test_join_twice(rocketlendp, borrower1):
@@ -839,6 +842,7 @@ def test_leave_protocol(rocketlendp, borrower1):
     receipt = rocketlend.leaveAsBorrower(node, sender=borrower)
     logs = rocketlend.LeaveProtocol.from_receipt(receipt)
     assert len(logs) == 1
+    assert logs[0].oldPending == nullAddress
 
 def test_leave_with_debt(rocketlendp, borrower1b):
     rocketlend = rocketlendp['rocketlend']
@@ -898,6 +902,7 @@ def test_leave_rejoin(rocketlendp, borrower1, rocketStorage):
     receipt = rocketlend.joinAsBorrower(node, sender=borrower)
     logs = rocketlend.JoinProtocol.from_receipt(receipt)
     assert len(logs) == 1
+    assert logs[0].borrower == borrower
     assert rocketlend.borrowers(node).address == borrower
 
 ### stakeRPLFor

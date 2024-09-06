@@ -496,9 +496,11 @@ event ConfirmChangeBorrowerAddress:
   old: indexed(address)
   oldPending: indexed(address)
 
-event JoinProtocol: pass
+event JoinProtocol:
+  borrower: indexed(address)
 
-event LeaveProtocol: pass
+event LeaveProtocol:
+  oldPending: indexed(address)
 
 event UnstakeRPL:
   total: indexed(uint256)
@@ -584,7 +586,7 @@ def joinAsBorrower(_node: address):
   if staticcall rocketNodeStaking.getRPLLockingAllowed(_node):
     extcall rocketNodeStaking.setRPLLockingAllowed(_node, False)
   self._updateIndex(_node, staticcall self._getRewardsPool().getRewardIndex())
-  log JoinProtocol()
+  log JoinProtocol(self.borrowers[_node].address)
 
 @external
 def leaveAsBorrower(_node: address):
@@ -594,8 +596,8 @@ def leaveAsBorrower(_node: address):
   extcall rocketStorage.setWithdrawalAddress(_node, msg.sender, True)
   extcall self._getRocketNodeManager().unsetRPLWithdrawalAddress(_node)
   self.borrowers[_node].address = empty(address)
+  log LeaveProtocol(self.borrowers[_node].pending)
   self.borrowers[_node].pending = empty(address)
-  log LeaveProtocol()
 
 @internal
 def _stakeRPLFor(_node: address, _amount: uint256):

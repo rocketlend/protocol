@@ -291,7 +291,9 @@ Vyper), chosen to be large enough to be practically unlimited.
     - `old: indexed(address)`
     - `oldPending: indexed(address)`
 - `JoinProtocol`
+    - `borrower: indexed(address)`
 - `LeaveProtocol`
+    - `oldPending: indexed(address)`
 - `UnstakeRPL`
     - `total: indexed(uint256)`
 - `Borrow`
