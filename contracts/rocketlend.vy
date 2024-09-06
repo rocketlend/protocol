@@ -489,8 +489,12 @@ def _payDebt(_poolId: bytes32, _node: address, _prevIndex: uint256, _amount: uin
 
 # Borrower actions
 
-event UpdateBorrower:
+event PendingChangeBorrowerAddress:
   old: indexed(address)
+
+event ConfirmChangeBorrowerAddress:
+  old: indexed(address)
+  oldPending: indexed(address)
 
 event JoinProtocol: pass
 
@@ -535,8 +539,8 @@ def _checkFromBorrower(_node: address):
 
 @internal
 def _updateBorrowerAddress(_node: address, _newAddress: address):
+  log ConfirmChangeBorrowerAddress(self.borrowers[_node].address, self.borrowers[_node].pending)
   self.borrowers[_node].pending = empty(address)
-  log UpdateBorrower(self.borrowers[_node].address)
   self.borrowers[_node].address = _newAddress
 
 @external
@@ -546,6 +550,7 @@ def changeBorrowerAddress(_node: address, _newAddress: address, _confirm: bool):
   if _confirm:
     self._updateBorrowerAddress(_node, _newAddress)
   else:
+    log PendingChangeBorrowerAddress(self.borrowers[_node].pending)
     self.borrowers[_node].pending = _newAddress
 
 @external

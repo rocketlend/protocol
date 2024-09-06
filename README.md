@@ -285,8 +285,11 @@ Vyper), chosen to be large enough to be practically unlimited.
 - `ChargeInterest`
     - `charged: uint256`
     - `total: uint256`
-- `UpdateBorrower`
+- `PendingChangeBorrowerAddress`
     - `old: indexed(address)`
+- `ConfirmChangeBorrowerAddress`
+    - `old: indexed(address)`
+    - `oldPending: indexed(address)`
 - `JoinProtocol`
 - `LeaveProtocol`
 - `UnstakeRPL`

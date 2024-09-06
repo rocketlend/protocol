@@ -722,14 +722,16 @@ def test_change_borrower_to_other(borrower1, other):
     borrower = borrower1['borrower']
     node = borrower1['node']
     receipt1 = rocketlend.changeBorrowerAddress(node, other, False, sender=borrower)
-    logs1 = rocketlend.UpdateBorrower.from_receipt(receipt1)
-    assert len(logs1) == 0
+    logs0 = rocketlend.ConfirmChangeBorrowerAddress.from_receipt(receipt1)
+    assert len(logs0) == 0
+    logs1 = rocketlend.PendingChangeBorrowerAddress.from_receipt(receipt1)
+    assert len(logs1) == 1
     assert rocketlend.borrowers(node).address == borrower
     assert rocketlend.borrowers(node).pending == other
     with reverts('revert: a'):
         rocketlend.confirmChangeBorrowerAddress(node, sender=borrower)
     receipt2 = rocketlend.confirmChangeBorrowerAddress(node, sender=other)
-    logs2 = rocketlend.UpdateBorrower.from_receipt(receipt2)
+    logs2 = rocketlend.ConfirmChangeBorrowerAddress.from_receipt(receipt2)
     assert len(logs2) == 1
     assert rocketlend.borrowers(node).address == other
     assert rocketlend.borrowers(node).pending == nullAddress
@@ -739,7 +741,7 @@ def test_change_borrower_to_other_force(borrower1, other):
     borrower = borrower1['borrower']
     node = borrower1['node']
     receipt = rocketlend.changeBorrowerAddress(node, other, True, sender=borrower)
-    logs = rocketlend.UpdateBorrower.from_receipt(receipt)
+    logs = rocketlend.ConfirmChangeBorrowerAddress.from_receipt(receipt)
     assert len(logs) == 1
     assert logs[0].old == borrower
 
