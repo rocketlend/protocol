@@ -196,18 +196,18 @@ struct PoolItem:
   next: uint256
   poolId: bytes32
 # the index of the start and the end of a linked list is 0 (i.e. last item's next == 0, and first item is the next of index 0)
-# the element at index 0 is a sentinel: it stores the next unused item index, i.e. poolId == convert(len(nextIndex), bytes32)
+# the element at index 0 is a sentinel: it stores the highest used index, i.e. poolId == convert(nextIndex - 1, bytes32)
 debtPools: public(HashMap[address, HashMap[uint256, PoolItem]]) # linked list of pools in which a borrower has non-zero debt, sorted by end time, earliest first
 
 # assumes _poolId is active for _node, but checks _prev is the right item to insert it after
 @internal
 def _insertDebtPool(_node: address, _poolId: bytes32, _prev: uint256):
-  newIndex: uint256 = convert(self.debtPools[_node][0].poolId, uint256)
-  self.debtPools[_node][0].poolId = convert(newIndex + 1, bytes32)
+  newIndex: uint256 = convert(self.debtPools[_node][0].poolId, uint256) + 1
+  self.debtPools[_node][0].poolId = convert(newIndex, bytes32)
   self.debtPools[_node][newIndex].poolId = _poolId
-  assert self.params[self.debtPools[_node][_prev].poolId].endTime <= self.params[_poolId].endTime or _prev == 0, "p"
+  assert _prev == 0 or self.params[self.debtPools[_node][_prev].poolId].endTime <= self.params[_poolId].endTime, "p"
   nextIndex: uint256 = self.debtPools[_node][_prev].next
-  assert self.params[_poolId].endTime <= self.params[self.debtPools[_node][nextIndex].poolId].endTime or nextIndex == 0, "n"
+  assert nextIndex == 0 or self.params[_poolId].endTime <= self.params[self.debtPools[_node][nextIndex].poolId].endTime, "n"
   self.debtPools[_node][newIndex].next = nextIndex
   self.debtPools[_node][_prev].next = newIndex
 
