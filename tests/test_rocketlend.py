@@ -204,6 +204,17 @@ def rocketlendp(rocketlendf, RPLToken, rocketVaultImpersonated, lender2):
     poolId = receipt.return_value
     return dict(receipt=receipt, lenderId=1, lender=lender2, rocketlend=rocketlendf, poolId=poolId, endTime=endTime, amount=amount)
 
+# same as above but with longer endtime
+@pytest.fixture()
+def rocketlendpl(rocketlendf, RPLToken, rocketVaultImpersonated, lender2):
+    amount = 200 * 10 ** RPLToken.decimals()
+    grab_RPL(lender2, amount, RPLToken, rocketVaultImpersonated, rocketlendf)
+    endTime=time_from_now(days=31*6)
+    params = dict(lender=1, interestRate=10, endTime=endTime)
+    receipt = rocketlendf.createPool(params, amount, 0, [0], sender=lender2)
+    poolId = receipt.return_value
+    return dict(receipt=receipt, lenderId=1, lender=lender2, rocketlend=rocketlendf, poolId=poolId, endTime=endTime, amount=amount)
+
 ## Borrower joining
 
 @pytest.fixture()
@@ -233,6 +244,17 @@ def borrower1b(rocketlendp, RPLToken, rocketNodeDeposit, borrower1, other):
     rocketNodeDeposit.depositEthFor(node, value='8 ether', sender=other)
     receipt = rocketlend.borrow(poolId, node, 0, amount, sender=borrower)
     return dict(borrower1, poolId=poolId, lender=rocketlendp['lender'], amount=amount, receipt=receipt)
+
+@pytest.fixture()
+def borrower1bl(rocketlendpl, RPLToken, rocketNodeDeposit, borrower1, other):
+    rocketlend = rocketlendpl['rocketlend']
+    poolId = rocketlendpl['poolId']
+    node = borrower1['node']
+    borrower = borrower1['borrower']
+    amount = 50 * 10 ** RPLToken.decimals()
+    rocketNodeDeposit.depositEthFor(node, value='8 ether', sender=other)
+    receipt = rocketlend.borrow(poolId, node, 0, amount, sender=borrower)
+    return dict(borrower1, poolId=poolId, lender=rocketlendpl['lender'], amount=amount, receipt=receipt)
 
 ## Repayment
 
@@ -1168,15 +1190,34 @@ def test_withdraw_other(rocketlendp, borrower1b, other):
     with reverts('revert: a'):
         rocketlend.withdraw(node, 1, 1, sender=other)
 
-def test_withdraw_RPL(rocketlendp, RPLToken, borrower1b, chain):
+def test_withdraw_RPL_default(rocketlendp, borrower1b):
     rocketlend = rocketlendp['rocketlend']
     node = borrower1b['node']
     borrower = borrower1b['borrower']
 
+    # extend beyond loan end time (and RP cooldown)
+    chain.pending_timestamp += round(datetime.timedelta(days=30).total_seconds())
+    assert rocketlend.params(rocketlendp['poolId']).endTime < chain.pending_timestamp
+
+    # increase RPL held in rocketlend
+    amountBorrowed = borrower1b['amount']
+    rocketlend.unstakeRPL(node, amountBorrowed, sender=borrower)
+
+    prevBalanceRPL = rocketlend.borrowers(node).RPL
+    withdrawAmountRPL = prevBalanceRPL // 2
+
+    with reverts('revert: f'):
+        rocketlend.withdraw(node, withdrawAmountRPL, 0, sender=borrower)
+
+def test_withdraw_RPL(rocketlendpl, RPLToken, borrower1bl, chain):
+    rocketlend = rocketlendpl['rocketlend']
+    node = borrower1bl['node']
+    borrower = borrower1bl['borrower']
+
     # skip RP withdrawal cooldown period
     chain.pending_timestamp += round(datetime.timedelta(days=90).total_seconds())
     # increase RPL held in rocketlend
-    amountBorrowed = borrower1b['amount']
+    amountBorrowed = borrower1bl['amount']
     rocketlend.unstakeRPL(node, amountBorrowed, sender=borrower)
 
     debt = get_debt(rocketlend, node)
@@ -1202,15 +1243,15 @@ def test_withdraw_RPL(rocketlendp, RPLToken, borrower1b, chain):
     assert logs[0].totalRPL == prevBalanceRPL - withdrawAmountRPL
     assert logs[0].totalETH == prevBalanceETH
 
-def test_withdraw_too_much_RPL(rocketlendp, borrower1b, chain):
-    rocketlend = rocketlendp['rocketlend']
-    node = borrower1b['node']
-    borrower = borrower1b['borrower']
+def test_withdraw_too_much_RPL(rocketlendpl, borrower1bl, chain):
+    rocketlend = rocketlendpl['rocketlend']
+    node = borrower1bl['node']
+    borrower = borrower1bl['borrower']
 
     # skip RP withdrawal cooldown period
     chain.pending_timestamp += round(datetime.timedelta(days=90).total_seconds())
     # increase RPL held in rocketlend
-    amountBorrowed = borrower1b['amount']
+    amountBorrowed = borrower1bl['amount']
     rocketlend.unstakeRPL(node, amountBorrowed, sender=borrower)
 
     debt = get_debt(rocketlend, node)
