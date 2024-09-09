@@ -223,9 +223,9 @@ def _removeDebtPool(_node: address, _poolId: uint256, _prev: uint256):
 
  # assumes _poolId is active for _node, but checks _prev is the right item to insert it after
 @internal
-def _insertUntilList(_node: address, _poolId: bytes32, _prev: uint256):
-  newIndex: uint256 = convert(self.untilList[_node][0].poolId, uint256) + 1
-  self.untilList[_node][0].poolId = convert(newIndex, bytes32)
+def _insertUntilList(_node: address, _poolId: uint256, _prev: uint256):
+  newIndex: uint256 = self.untilList[_node][0].poolId + 1
+  self.untilList[_node][0].poolId = newIndex
   self.untilList[_node][newIndex].poolId = _poolId
   assert  _prev == 0 or self.loans[self.untilList[_node][_prev].poolId][_node].accountedUntil <= self.loans[_poolId][_node].accountedUntil, "p"
   nextIndex: uint256 = self.untilList[_node][_prev].next
@@ -236,7 +236,7 @@ def _insertUntilList(_node: address, _poolId: bytes32, _prev: uint256):
     self.untilListLastIndex[_node] = newIndex
 
 @internal
-def _removeUntilList(_node: address, _poolId: bytes32, _prev: uint256):
+def _removeUntilList(_node: address, _poolId: uint256, _prev: uint256):
   index: uint256 = self.untilList[_node][_prev].next
   assert self.untilList[_node][index].poolId == _poolId, "i"
   nextIndex: uint256 = self.untilList[_node][index].next
