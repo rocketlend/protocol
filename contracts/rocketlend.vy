@@ -153,32 +153,32 @@ def _getMinipoolManager() -> RocketMinipoolManagerInterface:
     staticcall rocketStorage.getAddress(rocketMinipoolManagerKey)
   )
 
-lenderAddress: public(HashMap[uint256, address])
-pendingLenderAddress: public(HashMap[uint256, address])
+nextPoolId: public(uint256)
 
 struct PoolParams:
-  lender: uint256
   interestRate: uint8 # whole number percentage APR
   endTime: uint256 # seconds after Unix epoch
 
-params: public(HashMap[bytes32, PoolParams])
+params: public(HashMap[uint256, PoolParams])
 
 struct PoolState:
   available: uint256 # RPL available to be returned to the lender
   borrowed: uint256 # total RPL currently borrowed by borrowers
   allowance: uint256 # limit on RPL that can be made available by transferring borrowed from another of this lender's pools (or interest from another loan)
   reclaimed: uint256 # ETH accrued (not yet returned to lender) in service of defaults
+  lenderAddress: address # current address for the lender
+  pendingLenderAddress: address # potential future address for the lender
 
-pools: public(HashMap[bytes32, PoolState])
+pools: public(HashMap[uint256, PoolState])
 
-allowedToBorrow: public(HashMap[bytes32, HashMap[address, bool]])
+allowedToBorrow: public(HashMap[uint256, HashMap[address, bool]])
 
 struct LoanState:
   borrowed: uint256 # RPL currently borrowed
   interestDue: uint256 # interest already accumulated (and not yet paid)
   accountedUntil: uint256 # start time for ongoing interest accumulation on borrowed
 
-loans: public(HashMap[bytes32, HashMap[address, LoanState]])
+loans: public(HashMap[uint256, HashMap[address, LoanState]])
 
 struct BorrowerState:
   borrowed: uint256 # total RPL borrowed
@@ -194,16 +194,16 @@ intervals: public(HashMap[address, HashMap[uint256, bool]]) # intervals known to
 
 struct PoolItem:
   next: uint256
-  poolId: bytes32
+  poolId: uint256
 # the index of the start and the end of a linked list is 0 (i.e. last item's next == 0, and first item is the next of index 0)
-# the element at index 0 is a sentinel: it stores the highest used index, i.e. poolId == convert(nextIndex - 1, bytes32)
+# the element at index 0 is a sentinel: it stores the highest used index, i.e. poolId + 1 == nextIndex
 debtPools: public(HashMap[address, HashMap[uint256, PoolItem]]) # linked list of pools in which a borrower has non-zero debt, sorted by end time, earliest first
 
 # assumes _poolId is active for _node, but checks _prev is the right item to insert it after
 @internal
-def _insertDebtPool(_node: address, _poolId: bytes32, _prev: uint256):
-  newIndex: uint256 = convert(self.debtPools[_node][0].poolId, uint256) + 1
-  self.debtPools[_node][0].poolId = convert(newIndex, bytes32)
+def _insertDebtPool(_node: address, _poolId: uint256, _prev: uint256):
+  newIndex: uint256 = self.debtPools[_node][0].poolId + 1
+  self.debtPools[_node][0].poolId = newIndex
   self.debtPools[_node][newIndex].poolId = _poolId
   assert _prev == 0 or self.params[self.debtPools[_node][_prev].poolId].endTime <= self.params[_poolId].endTime, "p"
   nextIndex: uint256 = self.debtPools[_node][_prev].next
@@ -212,7 +212,7 @@ def _insertDebtPool(_node: address, _poolId: bytes32, _prev: uint256):
   self.debtPools[_node][_prev].next = newIndex
 
 @internal
-def _removeDebtPool(_node: address, _poolId: bytes32, _prev: uint256):
+def _removeDebtPool(_node: address, _poolId: uint256, _prev: uint256):
   index: uint256 = self.debtPools[_node][_prev].next
   assert self.debtPools[_node][index].poolId == _poolId, "i"
   nextIndex: uint256 = self.debtPools[_node][index].next
@@ -234,29 +234,26 @@ def __default__():
 
 # Lender actions
 
-event RegisterLender:
-  lender: indexed(uint256)
+event CreatePool:
+  id: indexed(uint256)
 
-event PendingChangeLenderAddress:
+event PendingTransferPool:
   old: indexed(address)
 
-event ConfirmChangeLenderAddress:
+event ConfirmTransferPool:
   old: indexed(address)
   oldPending: indexed(address)
 
-event CreatePool:
-  id: indexed(bytes32)
-
 event SupplyPool:
-  id: indexed(bytes32)
+  id: indexed(uint256)
   total: indexed(uint256)
 
 event SetAllowance:
-  id: indexed(bytes32)
+  id: indexed(uint256)
   old: indexed(uint256)
 
 event ChangeAllowedToBorrow:
-  id: indexed(bytes32)
+  id: indexed(uint256)
   node: indexed(address)
   allowed: indexed(bool)
 
@@ -292,47 +289,32 @@ event ChargeInterest:
   charged: indexed(uint256)
   total: indexed(uint256)
 
-@external
-def registerLender() -> uint256:
-  id: uint256 = self.params[empty(bytes32)].lender
-  self.lenderAddress[id] = msg.sender
-  self.params[empty(bytes32)].lender = id + 1
-  log RegisterLender(id)
-  return id
-
 @internal
-def _updateLenderAddress(_lender: uint256, _newAddress: address):
-  log ConfirmChangeLenderAddress(self.lenderAddress[_lender], self.pendingLenderAddress[_lender])
-  self.pendingLenderAddress[_lender] = empty(address)
-  self.lenderAddress[_lender] = _newAddress
+def _transferPool(_poolId: uint256, _newAddress: address):
+  log ConfirmTransferPool(self.pools[_poolId].lenderAddress, self.pools[_poolId].pendingLenderAddress)
+  self.pools[_poolId].pendingLenderAddress = empty(address)
+  self.pools[_poolId].lenderAddress = _newAddress
 
 @external
-def changeLenderAddress(_lender: uint256, _newAddress: address, _confirm: bool):
-  assert msg.sender == self.lenderAddress[_lender], "a"
+def transferPool(_poolId: uint256, _newAddress: address, _confirm: bool):
+  assert msg.sender == self.pools[_poolId].lenderAddress, "a"
   if _confirm:
-    self._updateLenderAddress(_lender, _newAddress)
+    self._transferPool(_poolId, _newAddress)
   else:
-    log PendingChangeLenderAddress(self.pendingLenderAddress[_lender])
-    self.pendingLenderAddress[_lender] = _newAddress
+    log PendingTransferPool(self.pools[_poolId].pendingLenderAddress)
+    self.pools[_poolId].pendingLenderAddress = _newAddress
 
 @external
-def confirmChangeLenderAddress(_lender: uint256):
-  assert msg.sender == self.pendingLenderAddress[_lender], "a"
-  self._updateLenderAddress(_lender, msg.sender)
-
-@internal
-def _poolId(_params: PoolParams) -> bytes32:
-  return keccak256(concat(
-                     convert(_params.lender, bytes32),
-                     convert(_params.interestRate, bytes1),
-                     convert(_params.endTime, bytes32)
-                  ))
+def confirmTransferPool(_poolId: uint256):
+  assert msg.sender == self.pools[_poolId].pendingLenderAddress, "a"
+  self._transferPool(_poolId, msg.sender)
 
 @external
-def createPool(_params: PoolParams, _supply: uint256, _allowance: uint256, _borrowers: DynArray[address, MAX_ADDRESS_BATCH]) -> bytes32:
-  assert msg.sender == self.lenderAddress[_params.lender], "a"
-  poolId: bytes32 = self._poolId(_params)
+def createPool(_params: PoolParams, _supply: uint256, _allowance: uint256, _borrowers: DynArray[address, MAX_ADDRESS_BATCH]) -> uint256:
+  poolId: uint256 = self.nextPoolId
+  self.nextPoolId = poolId + 1
   self.params[poolId] = _params
+  self.pools[poolId].lenderAddress = msg.sender
   log CreatePool(poolId)
   if 0 < _supply:
     assert extcall RPL.transferFrom(msg.sender, self, _supply), "tf"
@@ -347,16 +329,11 @@ def createPool(_params: PoolParams, _supply: uint256, _allowance: uint256, _borr
   return poolId
 
 @internal
-@view
-def _lenderAddress(_poolId: bytes32) -> address:
-  return self.lenderAddress[self.params[_poolId].lender]
-
-@internal
-def _checkFromLender(_poolId: bytes32):
-  assert msg.sender == self._lenderAddress(_poolId), "a"
+def _checkFromLender(_poolId: uint256):
+  assert msg.sender == self.pools[_poolId].lenderAddress, "a"
 
 @external
-def changePoolRPL(_poolId: bytes32, _targetSupply: uint256):
+def changePoolRPL(_poolId: uint256, _targetSupply: uint256):
   currentSupply: uint256 = self.pools[_poolId].available
   if currentSupply != _targetSupply:
     if _targetSupply < currentSupply:
@@ -369,7 +346,7 @@ def changePoolRPL(_poolId: bytes32, _targetSupply: uint256):
     self.pools[_poolId].available = _targetSupply
 
 @external
-def withdrawEtherFromPool(_poolId: bytes32, _amount: uint256):
+def withdrawEtherFromPool(_poolId: uint256, _amount: uint256):
   self._checkFromLender(_poolId)
   self.pools[_poolId].reclaimed -= _amount
   log WithdrawETHFromPool()
@@ -379,7 +356,7 @@ addressMask: constant(uint256) = ~0 >> 96
 allowedBit: constant(uint256) = 1 << 160
 
 @external
-def changeAllowedToBorrow(_poolId: bytes32, _borrowers: DynArray[uint256, MAX_ADDRESS_BATCH]):
+def changeAllowedToBorrow(_poolId: uint256, _borrowers: DynArray[uint256, MAX_ADDRESS_BATCH]):
   self._checkFromLender(_poolId)
   for arg: uint256 in _borrowers:
     node: address = convert(arg & addressMask, address)
@@ -388,24 +365,24 @@ def changeAllowedToBorrow(_poolId: bytes32, _borrowers: DynArray[uint256, MAX_AD
     log ChangeAllowedToBorrow(_poolId, node, allowed)
 
 @external
-def setAllowance(_poolId: bytes32, _allowance: uint256):
+def setAllowance(_poolId: uint256, _allowance: uint256):
   self._checkFromLender(_poolId)
   log SetAllowance(_poolId, self.pools[_poolId].allowance)
   self.pools[_poolId].allowance = _allowance
 
 @external
-def updateInterestDue(_poolId: bytes32, _node: address):
+def updateInterestDue(_poolId: uint256, _node: address):
   self._chargeInterest(_poolId, _node)
 
 @internal
-def _chargeAndCheckEndedOwing(_poolId: bytes32, _node: address):
+def _chargeAndCheckEndedOwing(_poolId: uint256, _node: address):
   endTime: uint256 = self.params[_poolId].endTime
   assert endTime < block.timestamp, "tm"
   self._chargeInterest(_poolId, _node)
   assert 0 < self.loans[_poolId][_node].borrowed or 0 < self.loans[_poolId][_node].interestDue, "pa"
 
 @external
-def forceRepayRPL(_poolId: bytes32, _node: address, _prevIndex: uint256, _unstakeAmount: uint256):
+def forceRepayRPL(_poolId: uint256, _node: address, _prevIndex: uint256, _unstakeAmount: uint256):
   self._chargeAndCheckEndedOwing(_poolId, _node)
   if 0 < _unstakeAmount:
     extcall self._getRocketNodeStaking().withdrawRPL(_node, _unstakeAmount)
@@ -419,7 +396,7 @@ def forceRepayRPL(_poolId: bytes32, _node: address, _prevIndex: uint256, _unstak
   log ForceRepayRPL(available, self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
 
 @external
-def forceRepayETH(_poolId: bytes32, _node: address, _prevIndex: uint256):
+def forceRepayETH(_poolId: uint256, _node: address, _prevIndex: uint256):
   self._checkFromLender(_poolId)
   self._chargeAndCheckEndedOwing(_poolId, _node)
   ethPerRpl: uint256 = staticcall self._getRocketNetworkPrices().getRPLPrice()
@@ -432,7 +409,7 @@ def forceRepayETH(_poolId: bytes32, _node: address, _prevIndex: uint256):
 
 @external
 def forceClaimMerkleRewards(
-      _poolId: bytes32,
+      _poolId: uint256,
       _node: address,
       _prevIndex: uint256,
       _repayRPL: uint256,
@@ -459,7 +436,7 @@ def forceClaimMerkleRewards(
                         self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
 
 @external
-def forceDistributeRefund(_poolId: bytes32, _node: address, _prevIndex: uint256,
+def forceDistributeRefund(_poolId: uint256, _node: address, _prevIndex: uint256,
                           _distribute: bool,
                           _minipools: DynArray[MinipoolArgument, MAX_NODE_MINIPOOLS]):
   self._checkFromLender(_poolId)
@@ -476,7 +453,7 @@ def forceDistributeRefund(_poolId: bytes32, _node: address, _prevIndex: uint256,
                             self.borrowers[_node].borrowed, self.borrowers[_node].interestDue)
 
 @internal
-def _payDebt(_poolId: bytes32, _node: address, _prevIndex: uint256, _amount: uint256) -> uint256:
+def _payDebt(_poolId: uint256, _node: address, _prevIndex: uint256, _amount: uint256) -> uint256:
   amount: uint256 = _amount
   if amount <= self.loans[_poolId][_node].interestDue:
     amount -= self._repayInterest(_poolId, _node, amount)
@@ -624,7 +601,7 @@ def _outstandingInterest(_borrowed: uint256, _rate: uint8, _startTime: uint256, 
   return _borrowed * convert(_rate, uint256) * (_endTime - _startTime) // 100 // SECONDS_PER_YEAR
 
 @internal
-def _chargeInterest(_poolId: bytes32, _node: address):
+def _chargeInterest(_poolId: uint256, _node: address):
   borrowed: uint256 = self.loans[_poolId][_node].borrowed
   startTime: uint256 = self.loans[_poolId][_node].accountedUntil
   endTime: uint256 = self.params[_poolId].endTime
@@ -645,12 +622,12 @@ def _chargeInterest(_poolId: bytes32, _node: address):
 
 @internal
 @view
-def _loanEmpty(_poolId: bytes32, _node: address) -> bool:
+def _loanEmpty(_poolId: uint256, _node: address) -> bool:
   return (self.loans[_poolId][_node].borrowed == 0 and
           self.loans[_poolId][_node].interestDue == 0)
 
 @internal
-def _lend(_poolId: bytes32, _node: address, _amount: uint256):
+def _lend(_poolId: uint256, _node: address, _amount: uint256):
   if 0 < _amount:
     assert (self.allowedToBorrow[_poolId][empty(address)] or
             self.allowedToBorrow[_poolId][_node]), "r"
@@ -660,7 +637,7 @@ def _lend(_poolId: bytes32, _node: address, _amount: uint256):
     self.pools[_poolId].borrowed += _amount
 
 @internal
-def _repayInterest(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
+def _repayInterest(_poolId: uint256, _node: address, _amount: uint256) -> uint256:
   if 0 < _amount:
     self.loans[_poolId][_node].interestDue -= _amount
     self.borrowers[_node].interestDue -= _amount
@@ -668,7 +645,7 @@ def _repayInterest(_poolId: bytes32, _node: address, _amount: uint256) -> uint25
   return _amount
 
 @internal
-def _repay(_poolId: bytes32, _node: address, _amount: uint256) -> uint256:
+def _repay(_poolId: uint256, _node: address, _amount: uint256) -> uint256:
   if 0 < _amount:
     self.loans[_poolId][_node].borrowed -= _amount
     self.borrowers[_node].borrowed -= _amount
@@ -704,7 +681,7 @@ def _debt(_node: address) -> uint256:
   return self.borrowers[_node].borrowed + self.borrowers[_node].interestDue
 
 @external
-def borrow(_poolId: bytes32, _node: address, _prevIndex: uint256, _amount: uint256):
+def borrow(_poolId: uint256, _node: address, _prevIndex: uint256, _amount: uint256):
   self._checkFromBorrower(_node)
   assert block.timestamp < self.params[_poolId].endTime, "e"
   self._stakeRPLFor(_node, _amount)
@@ -718,7 +695,7 @@ def borrow(_poolId: bytes32, _node: address, _prevIndex: uint256, _amount: uint2
              self.loans[_poolId][_node].interestDue)
 
 @external
-def repay(_poolId: bytes32, _node: address, _prevIndex: uint256, _unstakeAmount: uint256, _repayAmount: uint256):
+def repay(_poolId: uint256, _node: address, _prevIndex: uint256, _unstakeAmount: uint256, _repayAmount: uint256):
   isBorrower: bool = msg.sender == self.borrowers[_node].address
   assert _unstakeAmount == 0 or isBorrower, "a"
   self._chargeInterest(_poolId, _node)
@@ -742,8 +719,8 @@ def repay(_poolId: bytes32, _node: address, _prevIndex: uint256, _unstakeAmount:
 
 @external
 def transferDebt(_node: address,
-                 _fromPool: bytes32, _fromPrevIndex: uint256,
-                 _toPool: bytes32, _toPrevIndex: uint256,
+                 _fromPool: uint256, _fromPrevIndex: uint256,
+                 _toPool: uint256, _toPrevIndex: uint256,
                  _fromInterest: uint256,
                  _fromBorrowed: uint256,
                  _fromAvailable: uint256):
@@ -751,7 +728,7 @@ def transferDebt(_node: address,
     # not from borrower allowed only if:
     # from lender, after end time, to a pool of no greater interest rate
     assert (
-      msg.sender == self._lenderAddress(_fromPool) and
+      msg.sender == self.pools[_fromPool].lenderAddress and
       self.params[_fromPool].endTime < block.timestamp and
       self.params[_toPool].interestRate <= self.params[_fromPool].interestRate
     ), "a"
@@ -762,12 +739,12 @@ def transferDebt(_node: address,
                                           0 < _fromAvailable):
     self._insertDebtPool(_node, _toPool, _toPrevIndex)
   if 0 < _fromInterest:
-    assert self.params[_fromPool].lender == self.params[_toPool].lender, "l"
+    assert self.pools[_fromPool].lenderAddress == self.pools[_toPool].lenderAddress, "l"
     self.pools[_toPool].allowance -= _fromInterest
     self.loans[_fromPool][_node].interestDue -= _fromInterest
     self.loans[_toPool][_node].interestDue += _fromInterest
   if 0 < _fromBorrowed:
-    assert self.params[_fromPool].lender == self.params[_toPool].lender, "l"
+    assert self.pools[_fromPool].lenderAddress == self.pools[_toPool].lenderAddress, "l"
     self.pools[_toPool].allowance -= _fromBorrowed
     self.loans[_fromPool][_node].borrowed -= _fromBorrowed
     self.loans[_toPool][_node].borrowed += _fromBorrowed

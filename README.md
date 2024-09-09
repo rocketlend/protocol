@@ -20,9 +20,8 @@ The protocol participants come in two types: "lenders", who supply RPL to the
 protocol, and "borrowers" who borrow RPL from the protocol to stake on Rocket
 Pool nodes.
 
-A lender is assigned a unique identifier when they register with Rocket Lend.
-They provide an address (their "lender address") to which funds from Rocket
-Lend will be sent, which can be changed.
+A lender is identified by their Ethereum address. They can create lending
+pools, which are transferable to other addresses.
 
 A borrower is identified by the address of the Rocket Pool node they are
 borrowing for. They also provide an address (their "borrower address") to
@@ -46,8 +45,9 @@ that it is borrowed. After the loan term, if there is outstanding debt it is
 charged interest at double the rate. The lender also expects to eventually be
 repaid the RPL they supplied to a lending pool.
 
-Each pool is identified by the following parameters:
-- Lender: the identifier for the lender, who receives repaid RPL and interest.
+Each pool is identified by a unique number.
+
+Pools are created with the following parameters which cannot be changed:
 - Interest rate: the percentage rate (RPL per RPL borrowed, as a percentage,
   per year), charged as interest to the borrower. Interest is charged on the
   borrowed amount, i.e., without compounding, at one-second granularity. Only a
@@ -57,12 +57,14 @@ Each pool is identified by the following parameters:
   interest can be seized by the lender from any of the borrower's RPL or ETH as
   it is withdrawn.
 
-RPL may be supplied to a pool (without changing its parameters) at any time.
-RPL that is not currently borrowed may be withdrawn from the pool at any time.
+RPL may be supplied to a pool at any time. RPL that is not currently borrowed
+may be withdrawn from the pool at any time. Debt in a pool can be transferred
+to another pool (if the same lender owns both pools and specifies the extent to
+which they permit such transfers).
 
 Lending pools can be restricted to a limited set of borrowers. The set of
 borrowers that are allowed to borrow from a pool can be changed at any time by
-the lender (without changing the parameters that identify the pool).
+the lender.
 
 ### Borrower Actions
 
@@ -117,10 +119,8 @@ remains below 100% of the borrower's available ETH.
 
 Lenders can use the Rocket Lend contract to:
 
-- Register as a lender in the protocol by claiming a new identifier
-- Change their lender address, i.e., transfer control (ownership of funds) of
-  their lender identifier to a new address
 - Create a new lending pool with their chosen parameters
+- Transfer a lending pool to another address
 - Restrict or expand the set of borrowers that are allowed to borrow RPL from
   one of their lending pools
 - Set the allowance for transfers of debt into one of their lending pools from
@@ -157,11 +157,11 @@ Vyper), chosen to be large enough to be practically unlimited.
 ### Structs
 
 - `PoolParams` (per pool id)
-  - `lender: uint256`: identifier (non-negative integer) of the pool owner
   - `interestRate: uint8`: interest rate (APR) as a whole-number percentage
   - `endTime: uint256`: seconds after the Unix epoch when the loan ends
 
 - `PoolState` (per pool id)
+  - `lender: address`: the pool owner
   - `available: uint256`: amount of RPL available to be borrowed or returned to the lender
   - `borrowed: uint256`: amount of RPL currently borrowed
   - `allowance: uint256`: limit on how much RPL can be made available by transferring either borrowed RPL from another of the lender's pools, or interest from another of the lender's loans
@@ -190,37 +190,35 @@ Vyper), chosen to be large enough to be practically unlimited.
 
 - `PoolItem`
   - `next: uint256`
-  - `poolId: bytes32`
+  - `poolId: uint256`
 
 ### Views
 
-- `params(id: bytes32) → PoolParams`
-- `pools(id: bytes32) → PoolState`
-- `loans(id: bytes32, node: address) → LoanState`
-- `allowedToBorrow(id: bytes32, node: address) → bool`: if the null address is allowed, anyone is
+- `nextPoolId() → uint256`
+- `params(poolId: uint256) → PoolParams`
+- `pools(poolId: uint256) → PoolState`
+- `loans(poolId: uint256, node: address) → LoanState`
+- `allowedToBorrow(poolId: uint256, node: address) → bool`: if the null address is allowed, anyone is
 - `borrowers(node: address) → BorrowerState`
 - `intervals(node: address, index: uint256) → bool`: whether a rewards interval index is known to be claimed
 - `debtPools(node: address, index: uint256) → PoolItem`
-- `lenderAddress(lender: uint256) → address`
-- `pendingLenderAddress(lender: uint256) → address`
 - `rocketStorage() → address`: the address of the Rocket Storage contract
 - `RPL() → address`: the address of the RPL token contract
 
 ### Lender functions
 
-- `registerLender() → uint256`
-- `changeLenderAddress(_lender: uint256, _newAddress: address, _confirm: bool)`
-- `confirmChangeLenderAddress(_lender: uint256)`
-- `createPool(_params: PoolParams, _supply: uint256, _allowance: uint256, _borrowers: DynArray[address, MAX_ADDRESS_BATCH]) → bytes32`
-- `changePoolRPL(_poolId: bytes32, _targetSupply: uint256)`: can be called by anyone if only supplying
-- `withdrawEtherFromPool(_poolId: bytes32, _amount: uint256)`
-- `changeAllowedToBorrow(_poolId: bytes32, _borrowers: DynArray[uint256, MAX_ADDRESS_BATCH])`
-- `setAllowance(_poolId: bytes32, _allowance: uint256)`
-- `updateInterestDue(_poolId: bytes32, _node: address)`: can be called by anyone
-- `forceRepayRPL(_poolId: bytes32, _node: address, _prevIndex: uint256, _unstakeAmount: uint256)`: can be called by anyone
-- `forceRepayETH(_poolId: bytes32, _node: address, _prevIndex: uint256)`
-- `forceClaimMerkleRewards(_poolId: bytes32, _node: address, _prevIndex: uint256, _repayRPL: uint256, _repayETH: uint256, _rewardIndex: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountRPL: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountETH: DynArray[uint256, MAX_CLAIM_INTERVALS], _merkleProof: DynArray[DynArray[bytes32, MAX_PROOF_LENGTH], MAX_CLAIM_INTERVALS])`
-- `forceDistributeRefund(_poolId: bytes32, _node: address, _prevIndex: uint256, _distribute: bool, _minipools: DynArray[MinipoolArgument, MAX_NODE_MINIPOOLS])`
+- `createPool(_params: PoolParams, _supply: uint256, _allowance: uint256, _borrowers: DynArray[address, MAX_ADDRESS_BATCH]) → uint256`
+- `transferPool(_poolId: uint256, _newLender: address, _confirm: bool)`
+- `confirmTransferPool(_poolId: uint256)`
+- `changePoolRPL(_poolId: uint256, _targetSupply: uint256)`: can be called by anyone if only supplying
+- `withdrawEtherFromPool(_poolId: uint256, _amount: uint256)`
+- `changeAllowedToBorrow(_poolId: uint256, _borrowers: DynArray[uint256, MAX_ADDRESS_BATCH])`
+- `setAllowance(_poolId: uint256, _allowance: uint256)`
+- `updateInterestDue(_poolId: uint256, _node: address)`: can be called by anyone
+- `forceRepayRPL(_poolId: uint256, _node: address, _prevIndex: uint256, _unstakeAmount: uint256)`: can be called by anyone
+- `forceRepayETH(_poolId: uint256, _node: address, _prevIndex: uint256)`
+- `forceClaimMerkleRewards(_poolId: uint256, _node: address, _prevIndex: uint256, _repayRPL: uint256, _repayETH: uint256, _rewardIndex: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountRPL: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountETH: DynArray[uint256, MAX_CLAIM_INTERVALS], _merkleProof: DynArray[DynArray[bytes32, MAX_PROOF_LENGTH], MAX_CLAIM_INTERVALS])`
+- `forceDistributeRefund(_poolId: uint256, _node: address, _prevIndex: uint256, _distribute: bool, _minipools: DynArray[MinipoolArgument, MAX_NODE_MINIPOOLS])`
 
 ### Borrower functions
 
@@ -230,9 +228,9 @@ Vyper), chosen to be large enough to be practically unlimited.
 - `leaveAsBorrower(_node: address)`
 - `setStakeRPLForAllowed(_node: address, _caller: address, _allowed: bool)`
 - `unstakeRPL(_node: address, _amount: uint256)`
-- `borrow(_poolId: bytes32, _node: address, _amount: uint256)`
-- `repay(_poolId: bytes32, _node: address, _prevIndex: uint256, _unstakeAmount: uint256, _repayAmount: uint256)`
-- `transferDebt(_node: address, _fromPool: bytes32, _fromPrevIndex: uint256, _toPool: bytes32, _toPrevIndex: uint256, _fromAvailable: uint256, _fromInterest: uint256, _fromAllowance: uint256)`
+- `borrow(_poolId: uint256, _node: address, _amount: uint256)`
+- `repay(_poolId: uint256, _node: address, _prevIndex: uint256, _unstakeAmount: uint256, _repayAmount: uint256)`
+- `transferDebt(_node: address, _fromPool: uint256, _fromPrevIndex: uint256, _toPool: uint256, _toPrevIndex: uint256, _fromAvailable: uint256, _fromInterest: uint256, _fromAllowance: uint256)`
 - `claimMerkleRewards(_node: address, _rewardIndex: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountRPL: DynArray[uint256, MAX_CLAIM_INTERVALS], _amountETH: DynArray[uint256, MAX_CLAIM_INTERVALS], _merkleProof: DynArray[DynArray[bytes32, MAX_PROOF_LENGTH], MAX_CLAIM_INTERVALS], _stakeAmount: uint256)`
 - `distributeRefund(_node: address, _distribute: bool, _minipools: DynArray[MinipoolArgument, MAX_NODE_MINIPOOLS])`
 - `withdraw(_node: address, _amountRPL: uint256, _amountETH: uint256)`
@@ -241,23 +239,21 @@ Vyper), chosen to be large enough to be practically unlimited.
 
 ### Events
 
-- `RegisterLender`
-    - `lender: indexed(uint256)`
-- `PendingChangeLenderAddress`
+- `CreatePool`
+    - `id: indexed(uint256)`
+- `PendingTransferPool`
     - `old: indexed(address)`
-- `ConfirmChangeLenderAddress`
+- `ConfirmTransferPool`
     - `old: indexed(address)`
     - `oldPending: indexed(address)`
-- `CreatePool`
-    - `id: bytes32`
 - `SupplyPool`
-    - `id: indexed(bytes32)`
+    - `id: indexed(uint256)`
     - `total: indexed(uint256)`
 - `SetAllowance`
-    - `id: indexed(bytes32)`
+    - `id: indexed(uint256)`
     - `old: indexed(uint256)`
 - `ChangeAllowedToBorrow`
-    - `id: indexed(bytes32)`
+    - `id: indexed(uint256)`
     - `node: indexed(address)`
     - `allowed: indexed(bool)`
 - `WithdrawETHFromPool`
